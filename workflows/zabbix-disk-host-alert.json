@@ -1,0 +1,177 @@
+{
+  "id": "c3d4e5f6-a7b8-9012-cdef-345678901234",
+  "name": "Zabbix — Disco Cheio e Host Indisponível",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zabbix-infra-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0001-0001-0001-000000000001",
+      "name": "Webhook Zabbix",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "zabbix-infra-alert"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f-host",    "name": "host",         "value": "={{ $json.body.host }}",         "type": "string" },
+            { "id": "f-ip",      "name": "ip",           "value": "={{ $json.body.ip }}",           "type": "string" },
+            { "id": "f-trigger", "name": "trigger_name", "value": "={{ $json.body.trigger_name }}", "type": "string" },
+            { "id": "f-type",    "name": "alert_type",   "value": "={{ $json.body.alert_type }}",   "type": "string" },
+            { "id": "f-detail",  "name": "detail",       "value": "={{ $json.body.detail }}",       "type": "string" },
+            { "id": "f-sev",     "name": "severity",     "value": "={{ $json.body.severity }}",     "type": "string" },
+            { "id": "f-eid",     "name": "event_id",     "value": "={{ $json.body.event_id }}",     "type": "string" },
+            { "id": "f-etype",   "name": "event_type",   "value": "={{ $json.body.event_type }}",   "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c1d2e3f4-0002-0002-0002-000000000002",
+      "name": "Normalizar Campos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.alert_type }}",
+                    "rightValue": "disk",
+                    "operator": { "type": "string", "operation": "contains" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Disco"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.alert_type }}",
+                    "rightValue": "unavailable",
+                    "operator": { "type": "string", "operation": "contains" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Indisponivel"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c1d2e3f4-0003-0003-0003-000000000003",
+      "name": "Tipo de Alerta",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF8C00\",\n  \"summary\": \"Disco Cheio — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"Espaço em Disco Crítico\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Detalhe\", \"value\": \"{{ $('Normalizar Campos').item.json.detail }}\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Ação recomendada\", \"value\": \"Verificar e limpar arquivos temporários, logs antigos e lixeira\" }\n    ],\n    \"markdown\": true\n  }]\n}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0004-0004-0004-000000000004",
+      "name": "Teams — Alerta Disco",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"CC0000\",\n  \"summary\": \"HOST INDISPONIVEL — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"HOST INACESSÍVEL\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Detalhe\", \"value\": \"{{ $('Normalizar Campos').item.json.detail }}\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Ação\", \"value\": \"Verificar conectividade de rede, status do servidor e coletor Zabbix\" }\n    ],\n    \"markdown\": true\n  }]\n}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0005-0005-0005-000000000005",
+      "name": "Teams — Host Indisponível",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Alerta recebido e equipe notificada via Teams.\"\n  },\n  \"id\": 1\n}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0006-0006-0006-000000000006",
+      "name": "Zabbix — Comentar Evento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\" }",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0007-0007-0007-000000000007",
+      "name": "Resposta HTTP 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [460, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Zabbix": { "main": [[{ "node": "Normalizar Campos", "type": "main", "index": 0 }]] },
+    "Normalizar Campos": {
+      "main": [
+        [
+          { "node": "Tipo de Alerta", "type": "main", "index": 0 },
+          { "node": "Resposta HTTP 200", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Tipo de Alerta": {
+      "main": [
+        [{ "node": "Teams — Alerta Disco", "type": "main", "index": 0 }],
+        [{ "node": "Teams — Host Indisponível", "type": "main", "index": 0 }]
+      ]
+    },
+    "Teams — Alerta Disco":       { "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
+    "Teams — Host Indisponível":  { "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "tags": [{ "name": "zabbix" }, { "name": "windows" }, { "name": "disco" }, { "name": "disponibilidade" }]
+}

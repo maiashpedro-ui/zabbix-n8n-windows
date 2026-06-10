@@ -1,4 +1,5 @@
 {
+  "id": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
   "name": "Zabbix — Remediação de Serviços Windows",
   "nodes": [
     {
@@ -125,7 +126,7 @@
       "position": [900, 180],
       "credentials": {
         "sshPassword": {
-          "id": "SSH_CREDENTIAL_ID",
+          "id": "3XrRB6hjuwbF5sGs",
           "name": "Windows Servers SSH"
         }
       }
