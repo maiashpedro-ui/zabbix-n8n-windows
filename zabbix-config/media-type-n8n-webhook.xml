@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>7.0</version>
+    <media_types>
+        <media_type>
+            <name>n8n Webhook — Windows Service Remediation</name>
+            <type>WEBHOOK</type>
+            <status>ENABLED</status>
+            <parameters>
+                <parameter>
+                    <name>n8n_url</name>
+                    <value>http://SEU_IP:5678/webhook/zabbix-alert</value>
+                </parameter>
+                <parameter>
+                    <name>HTTPProxy</name>
+                    <value/>
+                </parameter>
+            </parameters>
+            <script>
+                <![CDATA[
+var params = JSON.parse(value);
+var n8nUrl = params.n8n_url;
+
+var payload = {
+    host:         '{HOST.NAME}',
+    ip:           '{HOST.IP}',
+    trigger_name: '{TRIGGER.NAME}',
+    trigger_id:   '{TRIGGER.ID}',
+    service_name: '{ITEM.KEY1}',
+    event_id:     '{EVENT.ID}',
+    event_type:   '{EVENT.STATUS}',
+    severity:     '{TRIGGER.SEVERITY}',
+    timestamp:    '{EVENT.DATE} {EVENT.TIME}',
+    event_tags:   '{EVENT.TAGSJSON}'
+};
+
+var req = new HttpRequest();
+req.addHeader('Content-Type: application/json');
+
+var response = req.post(n8nUrl, JSON.stringify(payload));
+
+if (req.getStatus() !== 200) {
+    throw 'n8n webhook falhou: HTTP ' + req.getStatus() + ' — ' + response;
+}
+
+return 'OK: ' + response;
+                ]]>
+            </script>
+            <timeout>30s</timeout>
+            <message_templates>
+                <message_template>
+                    <event_source>TRIGGERS</event_source>
+                    <operation_mode>PROBLEM</operation_mode>
+                    <subject>Serviço parado: {HOST.NAME} — {TRIGGER.NAME}</subject>
+                    <message>Host: {HOST.NAME} ({HOST.IP})
+Trigger: {TRIGGER.NAME}
+Serviço: {ITEM.KEY1}
+Severidade: {TRIGGER.SEVERITY}
+Hora: {EVENT.DATE} {EVENT.TIME}
+ID do Evento: {EVENT.ID}</message>
+                </message_template>
+                <message_template>
+                    <event_source>TRIGGERS</event_source>
+                    <operation_mode>RECOVERY</operation_mode>
+                    <subject>Recuperado: {HOST.NAME} — {TRIGGER.NAME}</subject>
+                    <message>Host: {HOST.NAME} ({HOST.IP})
+Trigger: {TRIGGER.NAME}
+Serviço: {ITEM.KEY1}
+Recuperado em: {EVENT.RECOVERY.DATE} {EVENT.RECOVERY.TIME}
+Duração: {EVENT.DURATION}</message>
+                </message_template>
+            </message_templates>
+        </media_type>
+    </media_types>
+</zabbix_export>

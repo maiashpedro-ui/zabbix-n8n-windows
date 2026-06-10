@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>7.0</version>
+    <actions>
+        <action>
+            <name>Windows — Remediação de Serviços via n8n</name>
+            <eventsource>TRIGGERS</eventsource>
+            <status>ENABLED</status>
+            <filter>
+                <evaltype>AND</evaltype>
+                <conditions>
+                    <condition>
+                        <conditiontype>TRIGGER_SEVERITY</conditiontype>
+                        <operator>GREATER_OR_EQUAL</operator>
+                        <value>AVERAGE</value>
+                    </condition>
+                    <condition>
+                        <conditiontype>TRIGGER_NAME</conditiontype>
+                        <operator>LIKE</operator>
+                        <value>service</value>
+                    </condition>
+                    <condition>
+                        <conditiontype>HOST_GROUP</conditiontype>
+                        <operator>EQUAL</operator>
+                        <value>Windows Servers</value>
+                    </condition>
+                </conditions>
+            </filter>
+            <operations>
+                <operation>
+                    <operationtype>SEND_MESSAGE</operationtype>
+                    <esc_period>0</esc_period>
+                    <esc_step_from>1</esc_step_from>
+                    <esc_step_to>1</esc_step_to>
+                    <evaltype>AND_OR</evaltype>
+                    <opmessage>
+                        <default_msg>1</default_msg>
+                        <mediatypeid>
+                            <name>n8n Webhook — Windows Service Remediation</name>
+                        </mediatypeid>
+                    </opmessage>
+                    <opmessage_grp>
+                        <usrgrp>
+                            <name>Zabbix administrators</name>
+                        </usrgrp>
+                    </opmessage_grp>
+                </operation>
+            </operations>
+            <recovery_operations>
+                <operation>
+                    <operationtype>SEND_MESSAGE</operationtype>
+                    <evaltype>AND_OR</evaltype>
+                    <opmessage>
+                        <default_msg>1</default_msg>
+                        <mediatypeid>
+                            <name>n8n Webhook — Windows Service Remediation</name>
+                        </mediatypeid>
+                    </opmessage>
+                    <opmessage_grp>
+                        <usrgrp>
+                            <name>Zabbix administrators</name>
+                        </usrgrp>
+                    </opmessage_grp>
+                </operation>
+            </recovery_operations>
+        </action>
+    </actions>
+</zabbix_export>
