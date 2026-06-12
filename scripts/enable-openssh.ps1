@@ -57,8 +57,10 @@ $registryPath = "HKLM:\SOFTWARE\OpenSSH"
 if (-not (Test-Path $registryPath)) {
     New-Item -Path $registryPath -Force | Out-Null
 }
-$pwshPath = (Get-Command pwsh -ErrorAction SilentlyContinue)?.Source
-if (-not $pwshPath) {
+$pwshCmd = Get-Command pwsh -ErrorAction SilentlyContinue
+if ($pwshCmd) {
+    $pwshPath = $pwshCmd.Source
+} else {
     $pwshPath = (Get-Command powershell).Source
 }
 Set-ItemProperty -Path $registryPath -Name DefaultShell -Value $pwshPath
