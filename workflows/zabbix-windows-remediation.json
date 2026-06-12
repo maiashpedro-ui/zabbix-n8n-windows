@@ -63,21 +63,23 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.ECENTRAL_URL }}/dcapi/remotecontrol/executeScript",
+        "url": "=http://{{ $json.ip }}:{{ $env.WIN_AGENT_PORT }}/restart",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "={{ $env.ECENTRAL_API_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.WIN_AGENT_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"script_type\": \"POWERSHELL\",\n  \"script_content\": \"try { Start-Service -Name '{{ $json.service_name }}' -ErrorAction Stop; $s = Get-Service '{{ $json.service_name }}'; Write-Output $s.Status } catch { Write-Output 'ERROR:' $_.Exception.Message }\",\n  \"resource_name\": \"{{ $json.host }}\"\n}",
-        "options": {}
+        "body": "={ \"service_name\": \"{{ $json.service_name }}\" }",
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "a1b2c3d4-0004-0004-0004-000000000004",
-      "name": "Endpoint Central — Reiniciar Serviço",
+      "name": "Agente Windows — Reiniciar Serviço",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [900, 180]
@@ -88,10 +90,16 @@
           "options": { "caseSensitive": false },
           "conditions": [
             {
-              "id": "cond-running",
-              "leftValue": "={{ JSON.stringify($json) }}",
+              "id": "cond-running-status",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "success",
+              "operator": { "type": "string", "operation": "equals" }
+            },
+            {
+              "id": "cond-running-state",
+              "leftValue": "={{ $json.state }}",
               "rightValue": "Running",
-              "operator": { "type": "string", "operation": "contains" }
+              "operator": { "type": "string", "operation": "equals" }
             }
           ],
           "combinator": "and"
@@ -117,7 +125,7 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Serviço '{{ $('Normalizar Campos').item.json.service_name }}' reiniciado automaticamente via Endpoint Central em {{ $('Normalizar Campos').item.json.host }} em {{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\"\n  },\n  \"id\": 1\n}",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Serviço '{{ $('Normalizar Campos').item.json.service_name }}' reiniciado automaticamente via n8n em {{ $('Normalizar Campos').item.json.host }} em {{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\"\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0006-0006-0006-000000000006",
@@ -139,7 +147,7 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] FALHA ao reiniciar serviço '{{ $('Normalizar Campos').item.json.service_name }}' em {{ $('Normalizar Campos').item.json.host }} via Endpoint Central. Intervenção manual necessária.\"\n  },\n  \"id\": 1\n}",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] FALHA ao reiniciar serviço '{{ $('Normalizar Campos').item.json.service_name }}' em {{ $('Normalizar Campos').item.json.host }} pelo agente Windows. Intervenção manual necessária.\"\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0007-0007-0007-000000000007",
@@ -208,11 +216,11 @@
     },
     "É um PROBLEMA?": {
       "main": [
-        [{ "node": "Endpoint Central — Reiniciar Serviço", "type": "main", "index": 0 }],
+        [{ "node": "Agente Windows — Reiniciar Serviço", "type": "main", "index": 0 }],
         [{ "node": "Log Recuperação", "type": "main", "index": 0 }]
       ]
     },
-    "Endpoint Central — Reiniciar Serviço": {
+    "Agente Windows — Reiniciar Serviço": {
       "main": [[{ "node": "Serviço Reiniciado?", "type": "main", "index": 0 }]]
     },
     "Serviço Reiniciado?": {
@@ -239,7 +247,7 @@
     { "name": "zabbix" },
     { "name": "windows" },
     { "name": "remediacao" },
-    { "name": "endpoint-central" }
+    { "name": "agente-windows" }
   ],
   "triggerCount": 1,
   "versionId": "f1e2d3c4-b5a6-7890-abcd-ef1234567890"
