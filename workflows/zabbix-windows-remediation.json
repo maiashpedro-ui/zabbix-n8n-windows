@@ -72,8 +72,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\"],\n    \"filter\": { \"host\": [\"{{ $('Normalizar Campos').item.json.host }}\"] }\n  },\n  \"id\": 1\n}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\"],\n    \"filter\": { \"host\": [\"{{ $('Normalizar Campos').item.json.host }}\"] }\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0004-0004-0004-000000000004",
@@ -94,8 +94,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"script.execute\",\n  \"params\": {\n    \"scriptid\": \"{{ $env.ZABBIX_SCRIPT_ID }}\",\n    \"hostid\": \"{{ $json.result[0].hostid }}\",\n    \"manualinput\": \"{{ $('Normalizar Campos').item.json.service_name }}\"\n  },\n  \"id\": 2\n}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"script.execute\",\n  \"params\": {\n    \"scriptid\": \"{{ $env.ZABBIX_SCRIPT_ID }}\",\n    \"hostid\": \"{{ $json.result[0].hostid }}\",\n    \"manualinput\": \"{{ $('Normalizar Campos').item.json.service_name }}\"\n  },\n  \"id\": 2\n}",
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0011-0011-0011-000000000011",
@@ -144,8 +144,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Serviço '{{ $('Normalizar Campos').item.json.service_name }}' reiniciado automaticamente via Zabbix Agent em {{ $('Normalizar Campos').item.json.host }} em {{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\"\n  },\n  \"id\": 1\n}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Serviço '{{ $('Normalizar Campos').item.json.service_name }}' reiniciado automaticamente via Zabbix Agent em {{ $('Normalizar Campos').item.json.host }} em {{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\"\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0006-0006-0006-000000000006",
@@ -166,8 +166,8 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] FALHA ao reiniciar serviço '{{ $('Normalizar Campos').item.json.service_name }}' em {{ $('Normalizar Campos').item.json.host }} via Zabbix Agent. Intervenção manual necessária.\"\n  },\n  \"id\": 1\n}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] FALHA ao reiniciar serviço '{{ $('Normalizar Campos').item.json.service_name }}' em {{ $('Normalizar Campos').item.json.host }} via Zabbix Agent. Intervenção manual necessária.\"\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0007-0007-0007-000000000007",
@@ -181,8 +181,8 @@
         "method": "POST",
         "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
         "sendBody": true,
-        "contentType": "json",
-        "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF0000\",\n  \"summary\": \"Falha de Remediação — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"Falha ao Reiniciar Serviço\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Serviço\",    \"value\": \"{{ $('Normalizar Campos').item.json.service_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Trigger\",    \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Hora\",       \"value\": \"{{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\" }\n    ],\n    \"markdown\": true\n  }]\n}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF0000\",\n  \"summary\": \"Falha de Remediação — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"Falha ao Reiniciar Serviço\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Serviço\",    \"value\": \"{{ $('Normalizar Campos').item.json.service_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Trigger\",    \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Hora\",       \"value\": \"{{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\" }\n    ],\n    \"markdown\": true\n  }]\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0008-0008-0008-000000000008",
