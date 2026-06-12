@@ -57,6 +57,12 @@ services:
       - TZ=${GENERIC_TIMEZONE:-America/Sao_Paulo}
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - ECENTRAL_URL=${ECENTRAL_URL}
+      - ECENTRAL_API_KEY=${ECENTRAL_API_KEY}
+      - ZABBIX_URL=${ZABBIX_URL}
+      - ZABBIX_API_TOKEN=${ZABBIX_API_TOKEN}
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
