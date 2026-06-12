@@ -20,14 +20,14 @@
       "parameters": {
         "assignments": {
           "assignments": [
-            { "id": "field-host",    "name": "host",         "value": "={{ $json.body.host }}",         "type": "string" },
-            { "id": "field-ip",      "name": "ip",           "value": "={{ $json.body.ip }}",           "type": "string" },
-            { "id": "field-service", "name": "service_name", "value": "={{ $json.body.service_name.replace(/^service\\.info\\[/, '').replace(/,.*$/, '') }}", "type": "string" },
-            { "id": "field-event-type", "name": "event_type", "value": "={{ $json.body.event_type }}", "type": "string" },
-            { "id": "field-event-id",   "name": "event_id",   "value": "={{ $json.body.event_id }}",   "type": "string" },
-            { "id": "field-trigger", "name": "trigger_name", "value": "={{ $json.body.trigger_name }}", "type": "string" },
-            { "id": "field-severity","name": "severity",     "value": "={{ $json.body.severity }}",     "type": "string" },
-            { "id": "field-timestamp","name": "timestamp",   "value": "={{ $json.body.timestamp }}",   "type": "string" }
+            { "id": "field-host",       "name": "host",         "value": "={{ $json.body.host }}",         "type": "string" },
+            { "id": "field-ip",         "name": "ip",           "value": "={{ $json.body.ip }}",           "type": "string" },
+            { "id": "field-service",    "name": "service_name", "value": "={{ $json.body.service_name.replace(/^service\\.info\\[/, '').replace(/,.*$/, '') }}", "type": "string" },
+            { "id": "field-event-type", "name": "event_type",  "value": "={{ $json.body.event_type }}",   "type": "string" },
+            { "id": "field-event-id",   "name": "event_id",    "value": "={{ $json.body.event_id }}",     "type": "string" },
+            { "id": "field-trigger",    "name": "trigger_name","value": "={{ $json.body.trigger_name }}", "type": "string" },
+            { "id": "field-severity",   "name": "severity",    "value": "={{ $json.body.severity }}",     "type": "string" },
+            { "id": "field-timestamp",  "name": "timestamp",   "value": "={{ $json.body.timestamp }}",    "type": "string" }
           ]
         },
         "options": {}
@@ -63,26 +63,46 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://{{ $json.ip }}:{{ $env.WIN_AGENT_PORT }}/restart",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.WIN_AGENT_KEY }}" },
-            { "name": "Content-Type",  "value": "application/json" }
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={ \"service_name\": \"{{ $json.service_name }}\" }",
-        "options": {
-          "timeout": 30000
-        }
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\"],\n    \"filter\": { \"host\": [\"{{ $('Normalizar Campos').item.json.host }}\"] }\n  },\n  \"id\": 1\n}",
+        "options": {}
       },
       "id": "a1b2c3d4-0004-0004-0004-000000000004",
-      "name": "Agente Windows — Reiniciar Serviço",
+      "name": "Zabbix API — Buscar Host",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [900, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"script.execute\",\n  \"params\": {\n    \"scriptid\": \"{{ $env.ZABBIX_SCRIPT_ID }}\",\n    \"hostid\": \"{{ $json.result[0].hostid }}\",\n    \"manualinput\": \"{{ $('Normalizar Campos').item.json.service_name }}\"\n  },\n  \"id\": 2\n}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "a1b2c3d4-0011-0011-0011-000000000011",
+      "name": "Zabbix API — Executar Script",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 180]
     },
     {
       "parameters": {
@@ -90,16 +110,16 @@
           "options": { "caseSensitive": false },
           "conditions": [
             {
-              "id": "cond-running-status",
-              "leftValue": "={{ $json.status }}",
+              "id": "cond-response",
+              "leftValue": "={{ $json.result.response }}",
               "rightValue": "success",
               "operator": { "type": "string", "operation": "equals" }
             },
             {
-              "id": "cond-running-state",
-              "leftValue": "={{ $json.state }}",
+              "id": "cond-running",
+              "leftValue": "={{ $json.result.value }}",
               "rightValue": "Running",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": { "type": "string", "operation": "contains" }
             }
           ],
           "combinator": "and"
@@ -110,7 +130,7 @@
       "name": "Serviço Reiniciado?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1120, 180]
+      "position": [1340, 180]
     },
     {
       "parameters": {
@@ -119,20 +139,20 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Authorization", "value": "Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Serviço '{{ $('Normalizar Campos').item.json.service_name }}' reiniciado automaticamente via n8n em {{ $('Normalizar Campos').item.json.host }} em {{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\"\n  },\n  \"id\": 1\n}",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Serviço '{{ $('Normalizar Campos').item.json.service_name }}' reiniciado automaticamente via Zabbix Agent em {{ $('Normalizar Campos').item.json.host }} em {{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\"\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0006-0006-0006-000000000006",
       "name": "Zabbix API — Comentar Evento (Sucesso)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 80]
+      "position": [1560, 80]
     },
     {
       "parameters": {
@@ -141,20 +161,20 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Authorization", "value": "Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] FALHA ao reiniciar serviço '{{ $('Normalizar Campos').item.json.service_name }}' em {{ $('Normalizar Campos').item.json.host }} pelo agente Windows. Intervenção manual necessária.\"\n  },\n  \"id\": 1\n}",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] FALHA ao reiniciar serviço '{{ $('Normalizar Campos').item.json.service_name }}' em {{ $('Normalizar Campos').item.json.host }} via Zabbix Agent. Intervenção manual necessária.\"\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0007-0007-0007-000000000007",
       "name": "Zabbix API — Comentar Evento (Falha)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 280]
+      "position": [1560, 280]
     },
     {
       "parameters": {
@@ -169,7 +189,7 @@
       "name": "Teams — Escalada de Falha",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1560, 280]
+      "position": [1780, 280]
     },
     {
       "parameters": {
@@ -210,23 +230,26 @@
     },
     "Normalizar Campos": {
       "main": [[
-        { "node": "É um PROBLEMA?",  "type": "main", "index": 0 },
+        { "node": "É um PROBLEMA?",   "type": "main", "index": 0 },
         { "node": "Resposta HTTP 200", "type": "main", "index": 0 }
       ]]
     },
     "É um PROBLEMA?": {
       "main": [
-        [{ "node": "Agente Windows — Reiniciar Serviço", "type": "main", "index": 0 }],
-        [{ "node": "Log Recuperação", "type": "main", "index": 0 }]
+        [{ "node": "Zabbix API — Buscar Host", "type": "main", "index": 0 }],
+        [{ "node": "Log Recuperação",          "type": "main", "index": 0 }]
       ]
     },
-    "Agente Windows — Reiniciar Serviço": {
+    "Zabbix API — Buscar Host": {
+      "main": [[{ "node": "Zabbix API — Executar Script", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Executar Script": {
       "main": [[{ "node": "Serviço Reiniciado?", "type": "main", "index": 0 }]]
     },
     "Serviço Reiniciado?": {
       "main": [
         [{ "node": "Zabbix API — Comentar Evento (Sucesso)", "type": "main", "index": 0 }],
-        [{ "node": "Zabbix API — Comentar Evento (Falha)",  "type": "main", "index": 0 }]
+        [{ "node": "Zabbix API — Comentar Evento (Falha)",   "type": "main", "index": 0 }]
       ]
     },
     "Zabbix API — Comentar Evento (Falha)": {
@@ -247,7 +270,7 @@
     { "name": "zabbix" },
     { "name": "windows" },
     { "name": "remediacao" },
-    { "name": "agente-windows" }
+    { "name": "zabbix-agent" }
   ],
   "triggerCount": 1,
   "versionId": "f1e2d3c4-b5a6-7890-abcd-ef1234567890"
