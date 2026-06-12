@@ -95,7 +95,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"script.execute\",\n  \"params\": {\n    \"scriptid\": \"{{ $env.ZABBIX_SCRIPT_ID }}\",\n    \"hostid\": \"{{ $json.result[0].hostid }}\",\n    \"manualinput\": \"{{ $('Normalizar Campos').item.json.service_name }}\"\n  },\n  \"id\": 2\n}",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"script.execute\",\n  \"params\": {\n    \"scriptid\": {{ $env.ZABBIX_SCRIPT_ID }},\n    \"hostid\": {{ $json.result[0].hostid }},\n    \"manualinput\": \"{{ $('Normalizar Campos').item.json.service_name }}\"\n  },\n  \"id\": 2\n}",
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0011-0011-0011-000000000011",
