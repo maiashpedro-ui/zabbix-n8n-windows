@@ -55,6 +55,7 @@ services:
       - EXECUTIONS_DATA_MAX_AGE=168
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/Sao_Paulo}
       - TZ=${GENERIC_TIMEZONE:-America/Sao_Paulo}
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
