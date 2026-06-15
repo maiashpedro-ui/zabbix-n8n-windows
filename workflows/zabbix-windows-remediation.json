@@ -84,7 +84,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const hostid = parseInt($('Zabbix API — Buscar Host').item.json.result[0].hostid);\nconst scriptid = parseInt($env.ZABBIX_SCRIPT_ID);\nconst service_name = $('Normalizar Campos').item.json.service_name;\n\nreturn [{\n  json: {\n    execute_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'script.execute',\n      params: {\n        scriptid: scriptid,\n        hostid: hostid,\n        manualinput: service_name\n      },\n      id: 2\n    })\n  }\n}];"
+        "jsCode": "const buscarResult = $('Zabbix API — Buscar Host').item.json;\nconst hostname = $('Normalizar Campos').item.json.host;\n\nif (!buscarResult.result || buscarResult.result.length === 0) {\n  throw new Error('Host nao encontrado no Zabbix: ' + hostname);\n}\n\nconst hostid = parseInt(buscarResult.result[0].hostid);\nconst scriptid = parseInt($env.ZABBIX_SCRIPT_ID);\nconst service_name = $('Normalizar Campos').item.json.service_name;\n\nreturn [{\n  json: {\n    execute_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'script.execute',\n      params: {\n        scriptid: scriptid,\n        hostid: hostid,\n        manualinput: service_name\n      },\n      id: 2\n    })\n  }\n}];"
       },
       "id": "a1b2c3d4-0012-0012-0012-000000000012",
       "name": "Preparar Script Execute",
