@@ -84,6 +84,16 @@
     },
     {
       "parameters": {
+        "jsCode": "const hostid = parseInt($('Zabbix API — Buscar Host').item.json.result[0].hostid);\nconst scriptid = parseInt($env.ZABBIX_SCRIPT_ID);\nconst service_name = $('Normalizar Campos').item.json.service_name;\n\nreturn [{\n  json: {\n    execute_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'script.execute',\n      params: {\n        scriptid: scriptid,\n        hostid: hostid,\n        manualinput: service_name\n      },\n      id: 2\n    })\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0012-0012-0012-000000000012",
+      "name": "Preparar Script Execute",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1060, 180]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
         "sendHeaders": true,
@@ -95,14 +105,14 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({jsonrpc:'2.0',method:'script.execute',params:{scriptid:+$env.ZABBIX_SCRIPT_ID,hostid:+$json.result[0].hostid,manualinput:$('Normalizar Campos').item.json.service_name},id:2}) }}",
+        "jsonBody": "={{ $json.execute_body }}",
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0011-0011-0011-000000000011",
       "name": "Zabbix API — Executar Script",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 180]
+      "position": [1240, 180]
     },
     {
       "parameters": {
@@ -130,7 +140,7 @@
       "name": "Serviço Reiniciado?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1340, 180]
+      "position": [1440, 180]
     },
     {
       "parameters": {
@@ -152,7 +162,7 @@
       "name": "Zabbix API — Comentar Evento (Sucesso)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1560, 80]
+      "position": [1660, 80]
     },
     {
       "parameters": {
@@ -174,7 +184,7 @@
       "name": "Zabbix API — Comentar Evento (Falha)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1560, 280]
+      "position": [1660, 280]
     },
     {
       "parameters": {
@@ -189,7 +199,7 @@
       "name": "Teams — Escalada de Falha",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1780, 280]
+      "position": [1880, 280]
     },
     {
       "parameters": {
@@ -230,7 +240,7 @@
     },
     "Normalizar Campos": {
       "main": [[
-        { "node": "É um PROBLEMA?",   "type": "main", "index": 0 },
+        { "node": "É um PROBLEMA?",    "type": "main", "index": 0 },
         { "node": "Resposta HTTP 200", "type": "main", "index": 0 }
       ]]
     },
@@ -241,6 +251,9 @@
       ]
     },
     "Zabbix API — Buscar Host": {
+      "main": [[{ "node": "Preparar Script Execute", "type": "main", "index": 0 }]]
+    },
+    "Preparar Script Execute": {
       "main": [[{ "node": "Zabbix API — Executar Script", "type": "main", "index": 0 }]]
     },
     "Zabbix API — Executar Script": {
