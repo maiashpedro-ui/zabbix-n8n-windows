@@ -1,0 +1,205 @@
+{
+  "id": "c3d4e5f6-a7b8-9012-cdef-345678901234",
+  "name": "Zabbix — Remediação em Massa de Serviços Parados",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c1d2e3f4-0001-0001-0001-000000000001",
+      "name": "Executar Manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"trigger.get\",\n  \"params\": {\n    \"output\": [\"triggerid\", \"description\", \"priority\", \"lastchange\"],\n    \"selectHosts\": [\"hostid\", \"host\"],\n    \"selectItems\": [\"key_\"],\n    \"filter\": { \"value\": 1 },\n    \"search\": { \"description\": \"is not running\" },\n    \"monitored\": true,\n    \"active\": true,\n    \"only_true\": true,\n    \"skipDependent\": true\n  },\n  \"id\": 1\n}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0002-0002-0002-000000000002",
+      "name": "Zabbix API — Buscar Triggers Ativos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "id": "cond-tem",
+              "leftValue": "={{ $json.result ? $json.result.length : 0 }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1d2e3f4-0003-0003-0003-000000000003",
+      "name": "Tem Serviços Parados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggers = $json.result || [];\nconst scriptId = parseInt($env.ZABBIX_SCRIPT_ID);\nconst items    = [];\n\nfor (const trigger of triggers) {\n  const host = trigger.hosts?.[0];\n  const item = trigger.items?.[0];\n  if (!host || !item) continue;\n\n  const keyMatch = item.key_.match(/^service\\.info\\[([^,]+)/);\n  if (!keyMatch) continue;\n\n  const hostid = parseInt(host.hostid);\n  let serviceName = keyMatch[1];\n  // Remove aspas ao redor do nome (ex: \"cloudbase-init\" -> cloudbase-init)\n  if (serviceName.charCodeAt(0) === 34) serviceName = serviceName.slice(1, -1);\n\n  items.push({\n    json: {\n      hostname:     host.host,\n      service_name: serviceName,\n      execute_body: JSON.stringify({\n        jsonrpc: '2.0',\n        method:  'script.execute',\n        params:  { scriptid: scriptId, hostid, manualinput: serviceName },\n        id: 2\n      })\n    }\n  });\n}\n\nreturn items.length > 0 ? items : [{ json: { hostname: '', service_name: '', execute_body: '{}' } }];"
+      },
+      "id": "c1d2e3f4-0004-0004-0004-000000000004",
+      "name": "Preparar Execuções",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.execute_body }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "c1d2e3f4-0005-0005-0005-000000000005",
+      "name": "Zabbix API — Executar Script",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const prep    = $('Preparar Execuções').item.json;\nconst success = $json.result?.response === 'success';\nconst raw     = (\n  $json.result?.value ||\n  $json.result?.data ||\n  $json.error?.data ||\n  $json.error?.message ||\n  $json.message ||\n  'sem resposta'\n).toString();\n\n// Separa status e log do retorno 'Running|LOG:...'\nlet status = raw;\nlet logInfo = '';\nconst logIdx = raw.indexOf('|LOG:');\nif (logIdx !== -1) {\n  status  = raw.substring(0, logIdx);\n  logInfo = raw.substring(logIdx + 5).substring(0, 200);\n}\n\nreturn [{\n  json: {\n    hostname:     prep.hostname,\n    service_name: prep.service_name,\n    success,\n    output: status,\n    log_info: logInfo\n  }\n}];"
+      },
+      "id": "c1d2e3f4-0006-0006-0006-000000000006",
+      "name": "Processar Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 180]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "results",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0007-0007-0007-000000000007",
+      "name": "Agregar Resultados",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1560, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results      = $json.results || [];\nconst successCount = results.filter(r => r.success).length;\nconst failCount    = results.length - successCount;\nconst now          = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nconst lines        = results.map(r => {\n  let line = (r.success ? 'OK' : 'FALHA') + ' | ' + r.hostname + ' | ' + r.service_name + ' | ' + r.output;\n  if (r.log_info) line += '\\n  _Log: ' + r.log_info + '_';\n  return line;\n}).join('\\n\\n');\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: failCount === 0 ? '00B050' : (successCount === 0 ? 'FF0000' : 'FFA500'),\n      summary: 'Remediacao em massa: ' + successCount + '/' + results.length + ' servicos reiniciados',\n      sections: [{\n        activityTitle: 'Remediacao em Massa — ' + now,\n        activitySubtitle: successCount + ' reiniciados, ' + failCount + ' falhas de ' + results.length + ' total',\n        text: lines,\n        markdown: true\n      }]\n    })\n  }\n}];"
+      },
+      "id": "c1d2e3f4-0008-0008-0008-000000000008",
+      "name": "Montar Relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0009-0009-0009-000000000009",
+      "name": "Teams — Relatório de Remediação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 180]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "log-nada",
+              "name": "message",
+              "value": "Nenhum servico parado encontrado no Zabbix.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c1d2e3f4-0010-0010-0010-000000000010",
+      "name": "Sem Problemas Abertos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 420]
+    }
+  ],
+  "connections": {
+    "Executar Manualmente": {
+      "main": [[{ "node": "Zabbix API — Buscar Triggers Ativos", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Buscar Triggers Ativos": {
+      "main": [[{ "node": "Tem Serviços Parados?", "type": "main", "index": 0 }]]
+    },
+    "Tem Serviços Parados?": {
+      "main": [
+        [{ "node": "Preparar Execuções",    "type": "main", "index": 0 }],
+        [{ "node": "Sem Problemas Abertos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Preparar Execuções": {
+      "main": [[{ "node": "Zabbix API — Executar Script", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Executar Script": {
+      "main": [[{ "node": "Processar Resultado", "type": "main", "index": 0 }]]
+    },
+    "Processar Resultado": {
+      "main": [[{ "node": "Agregar Resultados", "type": "main", "index": 0 }]]
+    },
+    "Agregar Resultados": {
+      "main": [[{ "node": "Montar Relatório", "type": "main", "index": 0 }]]
+    },
+    "Montar Relatório": {
+      "main": [[{ "node": "Teams — Relatório de Remediação", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "zabbix" },
+    { "name": "windows" },
+    { "name": "remediacao" },
+    { "name": "bulk" }
+  ],
+  "triggerCount": 0,
+  "versionId": "c3d4e5f6-a7b8-9012-cdef-345678901234"
+}
