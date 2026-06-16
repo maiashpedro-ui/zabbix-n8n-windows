@@ -235,17 +235,16 @@
       "position": [1840, 300]
     },
     {
-      {
-        "parameters": {
-          "jsCode": "const norm = $('Normalizar Campos').item.json;\nconst logInfo = ($('Buscar Log Windows').item.json.result?.value || '').trim() || 'Nao disponivel';\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: 'FF0000',\n      summary: 'Falha de remediacao: ' + norm.service_name + ' em ' + norm.host,\n      sections: [{\n        activityTitle: 'Falha ao Reiniciar Servico',\n        activitySubtitle: norm.host,\n        facts: [\n          { name: 'Servico',              value: norm.service_name },\n          { name: 'Severidade',           value: norm.severity },\n          { name: 'Trigger',              value: norm.trigger_name },\n          { name: 'Hora',                 value: now },\n          { name: 'Ultimo evento no log', value: logInfo }\n        ],\n        markdown: true\n      }]\n    })\n  }\n}];"
-        },
-        "id": "a1b2c3d4-0016-0016-0016-000000000016",
-        "name": "Montar Teams Falha",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [2060, 300]
+      "parameters": {
+        "jsCode": "const norm = $('Normalizar Campos').item.json;\nconst logInfo = ($('Buscar Log Windows').item.json.result?.value || '').trim() || 'Nao disponivel';\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: 'FF0000',\n      summary: 'Falha de remediacao: ' + norm.service_name + ' em ' + norm.host,\n      sections: [{\n        activityTitle: 'Falha ao Reiniciar Servico',\n        activitySubtitle: norm.host,\n        facts: [\n          { name: 'Servico',              value: norm.service_name },\n          { name: 'Severidade',           value: norm.severity },\n          { name: 'Trigger',              value: norm.trigger_name },\n          { name: 'Hora',                 value: now },\n          { name: 'Ultimo evento no log', value: logInfo }\n        ],\n        markdown: true\n      }]\n    })\n  }\n}];"
       },
-      {
+      "id": "a1b2c3d4-0016-0016-0016-000000000016",
+      "name": "Montar Teams Falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2060, 300]
+    },
+    {
       "parameters": {
         "method": "POST",
         "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
