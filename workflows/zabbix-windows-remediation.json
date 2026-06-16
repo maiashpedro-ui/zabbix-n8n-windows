@@ -22,7 +22,7 @@
           "assignments": [
             { "id": "field-host",       "name": "host",         "value": "={{ $json.body.host }}",         "type": "string" },
             { "id": "field-ip",         "name": "ip",           "value": "={{ $json.body.ip }}",           "type": "string" },
-            { "id": "field-service",    "name": "service_name", "value": "={{ $json.body.service_name.replace(/^service\\.info\\[/, '').replace(/,.*$/, '') }}", "type": "string" },
+            { "id": "field-service",    "name": "service_name", "value": "={{ $json.body.service_name.replace(/^service\\.info\\[\"?/, '').replace(/\"?,.*$/, '') }}", "type": "string" },
             { "id": "field-event-type", "name": "event_type",  "value": "={{ $json.body.event_type }}",   "type": "string" },
             { "id": "field-event-id",   "name": "event_id",    "value": "={{ $json.body.event_id }}",     "type": "string" },
             { "id": "field-trigger",    "name": "trigger_name","value": "={{ $json.body.trigger_name }}", "type": "string" },
@@ -84,7 +84,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const buscarResult = $('Zabbix API — Buscar Host').item.json;\nconst hostname = $('Normalizar Campos').item.json.host;\n\nif (!buscarResult.result || buscarResult.result.length === 0) {\n  throw new Error('Host nao encontrado no Zabbix: ' + hostname);\n}\n\nconst hostid = parseInt(buscarResult.result[0].hostid);\nconst scriptid = parseInt($env.ZABBIX_SCRIPT_ID);\nconst service_name = $('Normalizar Campos').item.json.service_name;\n\nreturn [{\n  json: {\n    execute_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'script.execute',\n      params: {\n        scriptid: scriptid,\n        hostid: hostid,\n        manualinput: service_name\n      },\n      id: 2\n    })\n  }\n}];"
+        "jsCode": "const buscarResult = $('Zabbix API — Buscar Host').item.json;\nconst hostname = $('Normalizar Campos').item.json.host;\n\nif (!buscarResult.result || buscarResult.result.length === 0) {\n  throw new Error('Host nao encontrado no Zabbix: ' + hostname);\n}\n\nconst hostid            = parseInt(buscarResult.result[0].hostid);\nconst scriptid          = parseInt($env.ZABBIX_SCRIPT_ID);\nconst eventlog_scriptid = parseInt($env.ZABBIX_EVENTLOG_SCRIPT_ID);\nconst service_name      = $('Normalizar Campos').item.json.service_name;\nconst event_id          = $('Normalizar Campos').item.json.event_id;\nconst ip                = $('Normalizar Campos').item.json.ip;\nconst severity          = $('Normalizar Campos').item.json.severity;\nconst trigger_name      = $('Normalizar Campos').item.json.trigger_name;\nconst now               = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nreturn [{\n  json: {\n    execute_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'script.execute',\n      params: { scriptid, hostid, manualinput: service_name },\n      id: 2\n    }),\n    eventlog_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'script.execute',\n      params: { scriptid: eventlog_scriptid, hostid, manualinput: service_name },\n      id: 3\n    }),\n    success_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'event.acknowledge',\n      params: {\n        eventids: [event_id],\n        action: 4,\n        message: '[n8n] Servico ' + service_name + ' reiniciado automaticamente via Zabbix Agent em ' + hostname + ' em ' + now\n      },\n      id: 1\n    }),\n    failure_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'event.acknowledge',\n      params: {\n        eventids: [event_id],\n        action: 4,\n        message: '[n8n] FALHA ao reiniciar servico ' + service_name + ' em ' + hostname + ' via Zabbix Agent. Intervencao manual necessaria.'\n      },\n      id: 1\n    }),\n    teams_failure_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: 'FF0000',\n      summary: 'Falha de remediacao: ' + service_name + ' em ' + hostname,\n      sections: [{\n        activityTitle: 'Falha ao Reiniciar Servico',\n        activitySubtitle: hostname,\n        facts: [\n          { name: 'Servico',    value: service_name },\n          { name: 'Severidade', value: severity },\n          { name: 'Trigger',    value: trigger_name },\n          { name: 'Hora',       value: now }\n        ],\n        markdown: true\n      }]\n    })\n  }\n}];"
       },
       "id": "a1b2c3d4-0012-0012-0012-000000000012",
       "name": "Preparar Script Execute",
@@ -105,14 +105,37 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ $json.execute_body }}",
+        "jsonBody": "={{ $json.eventlog_body }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "a1b2c3d4-0015-0015-0015-000000000015",
+      "name": "Buscar Log Windows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1240, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Preparar Script Execute').item.json.execute_body }}",
         "options": { "timeout": 30000 }
       },
       "id": "a1b2c3d4-0011-0011-0011-000000000011",
       "name": "Zabbix API — Executar Script",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1240, 180]
+      "position": [1420, 180]
     },
     {
       "parameters": {
@@ -140,7 +163,7 @@
       "name": "Serviço Reiniciado?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1440, 180]
+      "position": [1620, 180]
     },
     {
       "parameters": {
@@ -155,36 +178,24 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] Serviço '{{ $('Normalizar Campos').item.json.service_name }}' reiniciado automaticamente via Zabbix Agent em {{ $('Normalizar Campos').item.json.host }} em {{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\"\n  },\n  \"id\": 1\n}",
+        "jsonBody": "={{ $('Preparar Script Execute').item.json.success_body }}",
         "options": {}
       },
       "id": "a1b2c3d4-0006-0006-0006-000000000006",
       "name": "Zabbix API — Comentar Evento (Sucesso)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1660, 80]
+      "position": [1840, 60]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Content-Type",  "value": "application/json" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"event.acknowledge\",\n  \"params\": {\n    \"eventids\": [\"{{ $('Normalizar Campos').item.json.event_id }}\"],\n    \"action\": 4,\n    \"message\": \"[n8n] FALHA ao reiniciar serviço '{{ $('Normalizar Campos').item.json.service_name }}' em {{ $('Normalizar Campos').item.json.host }} via Zabbix Agent. Intervenção manual necessária.\"\n  },\n  \"id\": 1\n}",
-        "options": {}
+        "jsCode": "const serviceStatus = $('Zabbix API — Executar Script').item.json.result?.value || '';\nconst logInfo = ($('Buscar Log Windows').item.json.result?.value || '').trim() || 'Nao disponivel';\nconst norm = $('Normalizar Campos').item.json;\nconst now  = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: '00B050',\n      summary: 'Servico reiniciado: ' + norm.service_name + ' em ' + norm.host,\n      sections: [{\n        activityTitle: 'Servico Reiniciado Automaticamente',\n        activitySubtitle: norm.host,\n        facts: [\n          { name: 'Servico',              value: norm.service_name },\n          { name: 'Status apos reinicio', value: serviceStatus },\n          { name: 'Severidade',           value: norm.severity },\n          { name: 'Trigger',              value: norm.trigger_name },\n          { name: 'Hora',                 value: now },\n          { name: 'Ultimo evento no log', value: logInfo }\n        ],\n        markdown: true\n      }]\n    })\n  }\n}];"
       },
-      "id": "a1b2c3d4-0007-0007-0007-000000000007",
-      "name": "Zabbix API — Comentar Evento (Falha)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1660, 280]
+      "id": "a1b2c3d4-0014-0014-0014-000000000014",
+      "name": "Montar Teams Sucesso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2060, 60]
     },
     {
       "parameters": {
@@ -192,14 +203,51 @@
         "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF0000\",\n  \"summary\": \"Falha de Remediação — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"Falha ao Reiniciar Serviço\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Serviço\",    \"value\": \"{{ $('Normalizar Campos').item.json.service_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Trigger\",    \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Hora\",       \"value\": \"{{ $now.toFormat('dd/MM/yyyy HH:mm:ss') }}\" }\n    ],\n    \"markdown\": true\n  }]\n}",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0013-0013-0013-000000000013",
+      "name": "Teams — Reinício com Sucesso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2280, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Preparar Script Execute').item.json.failure_body }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "Zabbix API — Comentar Evento (Falha)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1840, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Preparar Script Execute').item.json.teams_failure_body }}",
         "options": {}
       },
       "id": "a1b2c3d4-0008-0008-0008-000000000008",
       "name": "Teams — Escalada de Falha",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1880, 280]
+      "position": [2060, 300]
     },
     {
       "parameters": {
@@ -220,7 +268,7 @@
             {
               "id": "log-recovery",
               "name": "log",
-              "value": "={{ 'Recuperação recebida para ' + $json.host + ' — serviço ' + $json.service_name + ' em ' + $now.toFormat('dd/MM/yyyy HH:mm:ss') }}",
+              "value": "={{ 'Recuperação recebida para ' + $json.host + ' — serviço ' + $json.service_name }}",
               "type": "string"
             }
           ]
@@ -254,6 +302,9 @@
       "main": [[{ "node": "Preparar Script Execute", "type": "main", "index": 0 }]]
     },
     "Preparar Script Execute": {
+      "main": [[{ "node": "Buscar Log Windows", "type": "main", "index": 0 }]]
+    },
+    "Buscar Log Windows": {
       "main": [[{ "node": "Zabbix API — Executar Script", "type": "main", "index": 0 }]]
     },
     "Zabbix API — Executar Script": {
@@ -264,6 +315,12 @@
         [{ "node": "Zabbix API — Comentar Evento (Sucesso)", "type": "main", "index": 0 }],
         [{ "node": "Zabbix API — Comentar Evento (Falha)",   "type": "main", "index": 0 }]
       ]
+    },
+    "Zabbix API — Comentar Evento (Sucesso)": {
+      "main": [[{ "node": "Montar Teams Sucesso", "type": "main", "index": 0 }]]
+    },
+    "Montar Teams Sucesso": {
+      "main": [[{ "node": "Teams — Reinício com Sucesso", "type": "main", "index": 0 }]]
     },
     "Zabbix API — Comentar Evento (Falha)": {
       "main": [[{ "node": "Teams — Escalada de Falha", "type": "main", "index": 0 }]]
