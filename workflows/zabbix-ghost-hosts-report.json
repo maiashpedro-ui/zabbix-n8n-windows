@@ -1,0 +1,216 @@
+{
+  "id": "ghost001-a1b2-c3d4-e5f6-789012345678",
+  "name": "Zabbix — Relatório de Hosts Fantasmas",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1-5" }]
+        }
+      },
+      "id": "ghost-0001-0001-0001-000000000001",
+      "name": "Agendamento Diário 8h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\", \"name\"],\n    \"monitored_hosts\": true,\n    \"filter\": { \"status\": 0 }\n  },\n  \"id\": 1\n}",
+        "options": {}
+      },
+      "id": "ghost-0002-0002-0002-000000000002",
+      "name": "Zabbix API — Buscar Hosts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "id": "cond-tem-hosts",
+              "leftValue": "={{ $json.result ? $json.result.length : 0 }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ghost-0003-0003-0003-000000000003",
+      "name": "Tem Hosts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const hosts = $json.result || [];\nconst hostids = hosts.map(h => h.hostid);\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\n// Chave de CPU: system.cpu.util (Zabbix Agent e Agent 2)\n// Chave de Memoria: vm.memory.utilization (Agent 2) ou vm.memory.size[pused] (Agent classico)\nreturn [{\n  json: {\n    hosts,\n    generated_at: now,\n    cpu_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'item.get', id: 2,\n      params: {\n        output: ['itemid', 'hostid', 'lastvalue', 'key_'],\n        hostids: hostids,\n        filter: { key_: 'system.cpu.util', status: 0 },\n        monitored: true\n      }\n    }),\n    mem_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'item.get', id: 3,\n      params: {\n        output: ['itemid', 'hostid', 'lastvalue', 'key_'],\n        hostids: hostids,\n        searchWildcardsEnabled: true,\n        search: { key_: 'vm.memory.utilization' },\n        monitored: true\n      }\n    })\n  }\n}];"
+      },
+      "id": "ghost-0004-0004-0004-000000000004",
+      "name": "Preparar Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.cpu_body }}",
+        "options": {}
+      },
+      "id": "ghost-0005-0005-0005-000000000005",
+      "name": "Zabbix API — Buscar CPU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Preparar Queries').item.json.mem_body }}",
+        "options": {}
+      },
+      "id": "ghost-0006-0006-0006-000000000006",
+      "name": "Zabbix API — Buscar Memória",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const hosts      = $('Preparar Queries').item.json.hosts;\nconst cpuItems   = $('Zabbix API — Buscar CPU').item.json.result || [];\nconst memItems   = $json.result || [];\nconst now        = $('Preparar Queries').item.json.generated_at;\n\nconst CPU_THRESHOLD = 5;\nconst MEM_THRESHOLD = 20;\n\n// Ultimo valor de CPU por host\nconst cpuByHost = {};\nfor (const item of cpuItems) {\n  cpuByHost[item.hostid] = parseFloat(item.lastvalue);\n}\n\n// Ultimo valor de memoria por host\nconst memByHost = {};\nfor (const item of memItems) {\n  memByHost[item.hostid] = parseFloat(item.lastvalue);\n}\n\nconst report = [];\nfor (const host of hosts) {\n  const cpu = cpuByHost[host.hostid] !== undefined ? Math.round(cpuByHost[host.hostid] * 10) / 10 : null;\n  const mem = memByHost[host.hostid] !== undefined ? Math.round(memByHost[host.hostid] * 10) / 10 : null;\n  const hasData = cpu !== null && mem !== null;\n  const isGhost = hasData && cpu < CPU_THRESHOLD && mem < MEM_THRESHOLD;\n  report.push({ host: host.name, hostname: host.host, cpu, mem, hasData, isGhost });\n}\n\nconst ghosts = report.filter(r => r.isGhost);\nconst noData  = report.filter(r => !r.hasData);\n\nreturn [{ json: { report, ghosts, noData, total: hosts.length, CPU_THRESHOLD, MEM_THRESHOLD, generated_at: now } }];"
+      },
+      "id": "ghost-0007-0007-0007-000000000007",
+      "name": "Processar Fantasmas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { ghosts, noData, total, CPU_THRESHOLD, MEM_THRESHOLD, generated_at } = $json;\n\nconst color = ghosts.length === 0 ? '00B050' : (ghosts.length > 5 ? 'FF0000' : 'FFA500');\n\nconst sections = [{\n  activityTitle: 'Relatorio de Hosts Fantasmas — ' + generated_at,\n  activitySubtitle: ghosts.length + ' fantasma(s) de ' + total + ' hosts monitorados',\n  facts: [\n    { name: 'Criterio',             value: 'CPU < ' + CPU_THRESHOLD + '% E Memoria < ' + MEM_THRESHOLD + '%' },\n    { name: 'Total monitorado',     value: String(total) },\n    { name: 'Hosts fantasmas',      value: String(ghosts.length) },\n    { name: 'Sem dados de metrica', value: String(noData.length) }\n  ],\n  markdown: true\n}];\n\nif (ghosts.length > 0) {\n  sections.push({\n    activityTitle: 'Hosts com Baixissimo Uso',\n    text: ghosts.map(g => '**' + g.host + '** — CPU: ' + g.cpu + '% | Mem usada: ' + g.mem + '%').join('\\n\\n'),\n    markdown: true\n  });\n}\n\nif (noData.length > 0) {\n  sections.push({\n    activityTitle: 'Sem Dados (agente inativo ou item nao configurado)',\n    text: noData.map(h => h.host).join(', '),\n    markdown: true\n  });\n}\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: color,\n      summary: 'Hosts fantasmas: ' + ghosts.length + ' de ' + total,\n      sections\n    })\n  }\n}];"
+      },
+      "id": "ghost-0008-0008-0008-000000000008",
+      "name": "Montar Relatório Teams",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "ghost-0009-0009-0009-000000000009",
+      "name": "Teams — Relatório Fantasmas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 180]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sem-hosts",
+              "name": "message",
+              "value": "Nenhum host monitorado encontrado no Zabbix.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ghost-0010-0010-0010-000000000010",
+      "name": "Sem Hosts Monitorados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 420]
+    }
+  ],
+  "connections": {
+    "Agendamento Diário 8h": {
+      "main": [[{ "node": "Zabbix API — Buscar Hosts", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Buscar Hosts": {
+      "main": [[{ "node": "Tem Hosts?", "type": "main", "index": 0 }]]
+    },
+    "Tem Hosts?": {
+      "main": [
+        [{ "node": "Preparar Queries",        "type": "main", "index": 0 }],
+        [{ "node": "Sem Hosts Monitorados",   "type": "main", "index": 0 }]
+      ]
+    },
+    "Preparar Queries": {
+      "main": [[{ "node": "Zabbix API — Buscar CPU", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Buscar CPU": {
+      "main": [[{ "node": "Zabbix API — Buscar Memória", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Buscar Memória": {
+      "main": [[{ "node": "Processar Fantasmas", "type": "main", "index": 0 }]]
+    },
+    "Processar Fantasmas": {
+      "main": [[{ "node": "Montar Relatório Teams", "type": "main", "index": 0 }]]
+    },
+    "Montar Relatório Teams": {
+      "main": [[{ "node": "Teams — Relatório Fantasmas", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "zabbix" },
+    { "name": "relatorio" },
+    { "name": "agendado" }
+  ],
+  "triggerCount": 0,
+  "versionId": "ghost001-a1b2-c3d4-e5f6-789012345678"
+}
