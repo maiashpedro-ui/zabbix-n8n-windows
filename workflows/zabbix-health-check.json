@@ -1,0 +1,148 @@
+{
+  "id": "health01-a1b2-c3d4-e5f6-789012345678",
+  "name": "n8n — Health Check de Workflows",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "50 6 * * 1-5" }]
+        }
+      },
+      "id": "hc-0001-0001-0001-000000000001",
+      "name": "Agendamento 6h50 Dias Úteis",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://localhost:5678/api/v1/workflows",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-N8N-API-KEY", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "hc-0002-0002-0002-000000000002",
+      "name": "n8n API — Listar Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const workflows = ($json.data || []);\n\n// Workflows que devem SEMPRE estar ativos\nconst EXPECTED_ACTIVE = [\n  'Zabbix — Remediação de Serviços Windows',\n  'Zabbix — Disco Cheio e Host Indisponível',\n  'Zabbix — Alerta de CPU e Memória',\n  'Zabbix — Relatório de Hosts Fantasmas',\n  'Zabbix — Relatório Diário de Remediações'\n];\n\nconst inactive = [];\nconst missing  = [];\nconst allNames = workflows.map(w => w.name);\n\nfor (const expected of EXPECTED_ACTIVE) {\n  const wf = workflows.find(w => w.name === expected);\n  if (!wf) {\n    missing.push(expected);\n  } else if (!wf.active) {\n    inactive.push({ name: wf.name, updatedAt: wf.updatedAt });\n  }\n}\n\nconst hasProblems = inactive.length > 0 || missing.length > 0;\n\nreturn [{ json: { inactive, missing, hasProblems, total: workflows.length, active: workflows.filter(w => w.active).length } }];"
+      },
+      "id": "hc-0003-0003-0003-000000000003",
+      "name": "Verificar Workflows Esperados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "id": "cond-problem",
+              "leftValue": "={{ $json.hasProblems }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hc-0004-0004-0004-000000000004",
+      "name": "Tem Problema?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { inactive, missing, total, active } = $json;\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nconst facts = [];\n\nfor (const wf of inactive) {\n  facts.push({\n    name: wf.name,\n    value: 'INATIVO — ultima modificacao: ' + new Date(wf.updatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })\n  });\n}\n\nfor (const name of missing) {\n  facts.push({ name, value: 'NAO ENCONTRADO no n8n' });\n}\n\nreturn [{ json: { teams_body: JSON.stringify({\n  '@type': 'MessageCard',\n  '@context': 'http://schema.org/extensions',\n  themeColor: 'FF0000',\n  summary: 'ALERTA: ' + (inactive.length + missing.length) + ' workflow(s) com problema',\n  sections: [{\n    activityTitle: 'Health Check — Workflows com Problema',\n    activitySubtitle: now + ' | ' + active + '/' + total + ' workflows ativos',\n    facts,\n    markdown: true\n  }]\n}) } }];"
+      },
+      "id": "hc-0005-0005-0005-000000000005",
+      "name": "Montar Alerta Teams",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "hc-0006-0006-0006-000000000006",
+      "name": "Teams — Alerta Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 180]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ok-log",
+              "name": "status",
+              "value": "Todos os workflows esperados estao ativos.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "hc-0007-0007-0007-000000000007",
+      "name": "Tudo OK",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1100, 420]
+    }
+  ],
+  "connections": {
+    "Agendamento 6h50 Dias Úteis": {
+      "main": [[{ "node": "n8n API — Listar Workflows", "type": "main", "index": 0 }]]
+    },
+    "n8n API — Listar Workflows": {
+      "main": [[{ "node": "Verificar Workflows Esperados", "type": "main", "index": 0 }]]
+    },
+    "Verificar Workflows Esperados": {
+      "main": [[{ "node": "Tem Problema?", "type": "main", "index": 0 }]]
+    },
+    "Tem Problema?": {
+      "main": [
+        [{ "node": "Montar Alerta Teams", "type": "main", "index": 0 }],
+        [{ "node": "Tudo OK",             "type": "main", "index": 0 }]
+      ]
+    },
+    "Montar Alerta Teams": {
+      "main": [[{ "node": "Teams — Alerta Health Check", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "n8n" },
+    { "name": "health-check" },
+    { "name": "monitoramento" }
+  ],
+  "triggerCount": 0,
+  "versionId": "health01-a1b2-c3d4-e5f6-789012345678"
+}

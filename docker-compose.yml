@@ -66,6 +66,7 @@ services:
       - ZABBIX_SCRIPT_ID=${ZABBIX_SCRIPT_ID}
       - ZABBIX_EVENTLOG_SCRIPT_ID=${ZABBIX_EVENTLOG_SCRIPT_ID}
       - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
+      - N8N_API_KEY=${N8N_API_KEY}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
     volumes:
       - n8n_data:/home/node/.n8n

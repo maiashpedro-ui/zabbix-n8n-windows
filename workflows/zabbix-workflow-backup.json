@@ -1,0 +1,105 @@
+{
+  "id": "backup01-a1b2-c3d4-e5f6-789012345678",
+  "name": "n8n — Backup Automático de Workflows",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 6 * * 0" }]
+        }
+      },
+      "id": "bkp-0001-0001-0001-000000000001",
+      "name": "Agendamento Dominical 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://localhost:5678/api/v1/workflows",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-N8N-API-KEY", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bkp-0002-0002-0002-000000000002",
+      "name": "n8n API — Listar Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://localhost:5678/api/v1/executions?limit=20&status=error",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-N8N-API-KEY", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bkp-0003-0003-0003-000000000003",
+      "name": "n8n API — Execuções com Erro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const wfList = $('n8n API — Listar Workflows').item.json;\nconst errList = $('n8n API — Execuções com Erro').item.json;\n\nconst workflows = wfList.data || [];\nconst errors    = errList.data || [];\n\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nconst total    = workflows.length;\nconst active   = workflows.filter(w => w.active).length;\nconst inactive = total - active;\n\n// Salva resumo no static data para comparacao futura\nconst staticData = $getWorkflowStaticData('global');\nconst prevSnap   = staticData['wf_snapshot'] || {};\n\nconst changes = [];\nfor (const wf of workflows) {\n  const prev = prevSnap[wf.id];\n  if (prev && prev.active !== wf.active) {\n    changes.push(wf.name + ' ficou ' + (wf.active ? 'ATIVO' : 'INATIVO'));\n  }\n}\n\nconst newSnap = {};\nfor (const wf of workflows) { newSnap[wf.id] = { name: wf.name, active: wf.active }; }\nstaticData['wf_snapshot'] = newSnap;\nstaticData['wf_last_backup'] = now;\n\n// Erros recentes (agrupados por workflow)\nconst errByWf = {};\nfor (const e of errors) {\n  const wfName = e.workflowData?.name || e.workflowId || 'Desconhecido';\n  errByWf[wfName] = (errByWf[wfName] || 0) + 1;\n}\nconst errFacts = Object.entries(errByWf).map(([n, c]) => ({ name: n, value: String(c) + ' erro(s)' }));\n\nconst wfFacts = workflows.map(w => ({\n  name: w.name,\n  value: w.active ? 'Ativo' : 'Inativo'\n}));\n\nconst sections = [\n  {\n    activityTitle: 'Backup Semanal de Workflows — ' + now,\n    activitySubtitle: total + ' workflows | ' + active + ' ativos | ' + inactive + ' inativos',\n    facts: [\n      { name: 'Total',            value: String(total) },\n      { name: 'Ativos',           value: String(active) },\n      { name: 'Inativos',         value: String(inactive) },\n      { name: 'Alteracoes (7d)',  value: changes.length > 0 ? changes.join('; ') : 'Nenhuma' },\n      { name: 'Erros recentes',   value: errors.length > 0 ? String(errors.length) + ' execucoes com falha' : 'Nenhum' }\n    ],\n    markdown: true\n  },\n  {\n    activityTitle: 'Status de Cada Workflow',\n    facts: wfFacts,\n    markdown: true\n  }\n];\n\nif (errFacts.length > 0) {\n  sections.push({\n    activityTitle: 'Workflows com Falhas Recentes',\n    facts: errFacts,\n    markdown: true\n  });\n}\n\nreturn [{ json: {\n  teams_body: JSON.stringify({\n    '@type': 'MessageCard',\n    '@context': 'http://schema.org/extensions',\n    themeColor: inactive > 0 ? 'FFA500' : '00B050',\n    summary: 'Backup n8n: ' + total + ' workflows (' + active + ' ativos)',\n    sections\n  })\n} }];"
+      },
+      "id": "bkp-0004-0004-0004-000000000004",
+      "name": "Processar e Montar Relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "bkp-0005-0005-0005-000000000005",
+      "name": "Teams — Relatório de Backup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 380]
+    }
+  ],
+  "connections": {
+    "Agendamento Dominical 6h": {
+      "main": [[
+        { "node": "n8n API — Listar Workflows",    "type": "main", "index": 0 },
+        { "node": "n8n API — Execuções com Erro",  "type": "main", "index": 0 }
+      ]]
+    },
+    "n8n API — Listar Workflows":   { "main": [[{ "node": "Processar e Montar Relatório", "type": "main", "index": 0 }]] },
+    "n8n API — Execuções com Erro": { "main": [[{ "node": "Processar e Montar Relatório", "type": "main", "index": 0 }]] },
+    "Processar e Montar Relatório": { "main": [[{ "node": "Teams — Relatório de Backup",  "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "n8n" },
+    { "name": "backup" },
+    { "name": "relatorio" }
+  ],
+  "triggerCount": 0,
+  "versionId": "backup01-a1b2-c3d4-e5f6-789012345678"
+}

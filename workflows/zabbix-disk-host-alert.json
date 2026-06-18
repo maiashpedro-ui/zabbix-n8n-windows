@@ -86,32 +86,24 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
         "sendBody": true,
-        "contentType": "json",
-        "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF8C00\",\n  \"summary\": \"Disco Cheio — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"Espaço em Disco Crítico\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Detalhe\", \"value\": \"{{ $('Normalizar Campos').item.json.detail }}\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Ação recomendada\", \"value\": \"Verificar e limpar arquivos temporários, logs antigos e lixeira\" }\n    ],\n    \"markdown\": true\n  }]\n}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\"],\n    \"filter\": { \"host\": [\"{{ $('Normalizar Campos').item.json.host }}\"] }\n  },\n  \"id\": 1\n}",
         "options": {}
       },
-      "id": "c1d2e3f4-0004-0004-0004-000000000004",
-      "name": "Teams — Alerta Disco",
+      "id": "disk-new-0001-0001-0001-000000000001",
+      "name": "Buscar Host ID",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [900, 160]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
-        "sendBody": true,
-        "contentType": "json",
-        "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"CC0000\",\n  \"summary\": \"HOST INDISPONIVEL — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"HOST INACESSÍVEL\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Detalhe\", \"value\": \"{{ $('Normalizar Campos').item.json.detail }}\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Ação\", \"value\": \"Verificar conectividade de rede, status do servidor e coletor Zabbix\" }\n    ],\n    \"markdown\": true\n  }]\n}",
-        "options": {}
-      },
-      "id": "c1d2e3f4-0005-0005-0005-000000000005",
-      "name": "Teams — Host Indisponível",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [900, 420]
     },
     {
       "parameters": {
@@ -120,8 +112,70 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Authorization", "value": "Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"item.get\",\n  \"params\": {\n    \"output\": [\"itemid\", \"key_\", \"lastvalue\", \"units\"],\n    \"hostids\": [\"{{ $json.result?.[0]?.hostid }}\"],\n    \"search\": { \"key_\": \"pused\" },\n    \"monitored\": true\n  },\n  \"id\": 2\n}",
+        "options": {}
+      },
+      "id": "disk-new-0002-0002-0002-000000000002",
+      "name": "Buscar Items Disco Detalhe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const norm = $('Normalizar Campos').item.json;\nconst itemsResult = $json.result || [];\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nconst diskItems = itemsResult\n  .filter(i => {\n    const v = parseFloat(i.lastvalue);\n    return !isNaN(v) && v >= 0 && v <= 100;\n  })\n  .sort((a, b) => parseFloat(b.lastvalue) - parseFloat(a.lastvalue));\n\nconst diskFacts = diskItems.map(i => ({\n  name: i.key_,\n  value: parseFloat(i.lastvalue).toFixed(1) + '%'\n}));\n\nif (diskFacts.length === 0) {\n  diskFacts.push({ name: 'Uso de disco', value: norm.detail || 'Nao disponivel' });\n}\n\nconst topDisk = diskItems[0];\nconst worstDrive = topDisk ? topDisk.key_.replace('vfs.fs.size[', '').replace(',pused]', '') : 'desconhecido';\nconst worstPct = topDisk ? parseFloat(topDisk.lastvalue).toFixed(1) + '%' : norm.detail;\n\nreturn [{ json: { teams_body: JSON.stringify({\n  '@type': 'MessageCard',\n  '@context': 'http://schema.org/extensions',\n  themeColor: 'FF8C00',\n  summary: 'Disco Cheio — ' + norm.host + ' (' + worstPct + ')',\n  sections: [{\n    activityTitle: 'Espaco em Disco Critico',\n    activitySubtitle: norm.host,\n    facts: [\n      { name: 'Trigger',    value: norm.trigger_name },\n      { name: 'Severidade', value: norm.severity },\n      { name: 'Hora',       value: now },\n      ...diskFacts,\n      { name: 'Acao',       value: 'Verificar: Temp (%TEMP%), logs antigos, lixeira, arquivos de dump' }\n    ],\n    markdown: true\n  }]\n}) } }];"
+      },
+      "id": "disk-new-0003-0003-0003-000000000003",
+      "name": "Montar Alerta Disco",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0004-0004-0004-000000000004",
+      "name": "Teams — Alerta Disco",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"CC0000\",\n  \"summary\": \"HOST INDISPONIVEL — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"HOST INACESSIVEL\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }}\",\n    \"facts\": [\n      { \"name\": \"Detalhe\",    \"value\": \"{{ $('Normalizar Campos').item.json.detail }}\" },\n      { \"name\": \"Trigger\",    \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Acao\",       \"value\": \"Verificar conectividade de rede, status do servidor e coletor Zabbix\" }\n    ],\n    \"markdown\": true\n  }]\n}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-0005-0005-0005-000000000005",
+      "name": "Teams — Host Indisponível",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
           ]
         },
         "sendBody": true,
@@ -133,7 +187,7 @@
       "name": "Zabbix — Comentar Evento",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 300]
+      "position": [1700, 300]
     },
     {
       "parameters": {
@@ -151,21 +205,22 @@
   "connections": {
     "Webhook Zabbix": { "main": [[{ "node": "Normalizar Campos", "type": "main", "index": 0 }]] },
     "Normalizar Campos": {
-      "main": [
-        [
-          { "node": "Tipo de Alerta", "type": "main", "index": 0 },
-          { "node": "Resposta HTTP 200", "type": "main", "index": 0 }
-        ]
-      ]
+      "main": [[
+        { "node": "Tipo de Alerta",    "type": "main", "index": 0 },
+        { "node": "Resposta HTTP 200", "type": "main", "index": 0 }
+      ]]
     },
     "Tipo de Alerta": {
       "main": [
-        [{ "node": "Teams — Alerta Disco", "type": "main", "index": 0 }],
-        [{ "node": "Teams — Host Indisponível", "type": "main", "index": 0 }]
+        [{ "node": "Buscar Host ID",          "type": "main", "index": 0 }],
+        [{ "node": "Teams — Host Indisponível","type": "main", "index": 0 }]
       ]
     },
-    "Teams — Alerta Disco":       { "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
-    "Teams — Host Indisponível":  { "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] }
+    "Buscar Host ID":           { "main": [[{ "node": "Buscar Items Disco Detalhe", "type": "main", "index": 0 }]] },
+    "Buscar Items Disco Detalhe": { "main": [[{ "node": "Montar Alerta Disco",       "type": "main", "index": 0 }]] },
+    "Montar Alerta Disco":      { "main": [[{ "node": "Teams — Alerta Disco",        "type": "main", "index": 0 }]] },
+    "Teams — Alerta Disco":     { "main": [[{ "node": "Zabbix — Comentar Evento",   "type": "main", "index": 0 }]] },
+    "Teams — Host Indisponível":{ "main": [[{ "node": "Zabbix — Comentar Evento",   "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": {
