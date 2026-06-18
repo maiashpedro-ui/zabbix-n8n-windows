@@ -60,10 +60,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const hosts = $json.result || [];\nconst hostids = hosts.map(h => h.hostid);\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\n// Chave de CPU: system.cpu.util (Zabbix Agent e Agent 2)\n// Chave de Memoria: vm.memory.utilization (Agent 2) ou vm.memory.size[pused] (Agent classico)\nreturn [{\n  json: {\n    hosts,\n    generated_at: now,\n    cpu_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'item.get', id: 2,\n      params: {\n        output: ['itemid', 'hostid', 'lastvalue', 'key_'],\n        hostids: hostids,\n        filter: { key_: 'system.cpu.util', status: 0 },\n        monitored: true\n      }\n    }),\n    mem_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'item.get', id: 3,\n      params: {\n        output: ['itemid', 'hostid', 'lastvalue', 'key_'],\n        hostids: hostids,\n        searchWildcardsEnabled: true,\n        search: { key_: 'vm.memory.utilization' },\n        monitored: true\n      }\n    })\n  }\n}];"
+        "jsCode": "const hosts = $json.result || [];\nconst hostids = hosts.map(h => h.hostid);\nconst now = Math.floor(Date.now() / 1000);\nconst timeFrom = now - 86400;\nconst nowStr = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nreturn [{\n  json: {\n    hosts,\n    time_from: timeFrom,\n    time_till: now,\n    generated_at: nowStr,\n    cpu_items_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'item.get', id: 2,\n      params: {\n        output: ['itemid', 'hostid', 'key_'],\n        hostids,\n        search: { key_: 'system.cpu.util' },\n        monitored: true\n      }\n    }),\n    mem_items_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'item.get', id: 3,\n      params: {\n        output: ['itemid', 'hostid', 'key_'],\n        hostids,\n        search: { key_: 'vm.memory' },\n        monitored: true\n      }\n    })\n  }\n}];"
       },
       "id": "ghost-0004-0004-0004-000000000004",
-      "name": "Preparar Queries",
+      "name": "Preparar Item Queries",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [900, 180]
@@ -81,14 +81,14 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ $json.cpu_body }}",
+        "jsonBody": "={{ $json.cpu_items_body }}",
         "options": {}
       },
       "id": "ghost-0005-0005-0005-000000000005",
-      "name": "Zabbix API — Buscar CPU",
+      "name": "Buscar Items CPU",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 180]
+      "position": [1100, 180]
     },
     {
       "parameters": {
@@ -103,34 +103,88 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ $('Preparar Queries').item.json.mem_body }}",
+        "jsonBody": "={{ $('Preparar Item Queries').item.json.mem_items_body }}",
         "options": {}
       },
       "id": "ghost-0006-0006-0006-000000000006",
-      "name": "Zabbix API — Buscar Memória",
+      "name": "Buscar Items Memória",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 180]
+      "position": [1300, 180]
     },
     {
       "parameters": {
-        "jsCode": "const hosts      = $('Preparar Queries').item.json.hosts;\nconst cpuItems   = $('Zabbix API — Buscar CPU').item.json.result || [];\nconst memItems   = $json.result || [];\nconst now        = $('Preparar Queries').item.json.generated_at;\n\nconst CPU_THRESHOLD = 5;\nconst MEM_THRESHOLD = 20;\n\n// Ultimo valor de CPU por host\nconst cpuByHost = {};\nfor (const item of cpuItems) {\n  cpuByHost[item.hostid] = parseFloat(item.lastvalue);\n}\n\n// Ultimo valor de memoria por host\nconst memByHost = {};\nfor (const item of memItems) {\n  memByHost[item.hostid] = parseFloat(item.lastvalue);\n}\n\nconst report = [];\nfor (const host of hosts) {\n  const cpu = cpuByHost[host.hostid] !== undefined ? Math.round(cpuByHost[host.hostid] * 10) / 10 : null;\n  const mem = memByHost[host.hostid] !== undefined ? Math.round(memByHost[host.hostid] * 10) / 10 : null;\n  const hasData = cpu !== null && mem !== null;\n  const isGhost = hasData && cpu < CPU_THRESHOLD && mem < MEM_THRESHOLD;\n  report.push({ host: host.name, hostname: host.host, cpu, mem, hasData, isGhost });\n}\n\nconst ghosts = report.filter(r => r.isGhost);\nconst noData  = report.filter(r => !r.hasData);\n\nreturn [{ json: { report, ghosts, noData, total: hosts.length, CPU_THRESHOLD, MEM_THRESHOLD, generated_at: now } }];"
+        "jsCode": "const prep = $('Preparar Item Queries').item.json;\nconst cpuItems = $('Buscar Items CPU').item.json.result || [];\nconst memItemsRaw = $json.result || [];\n\n// Um item de CPU por host — prefere system.cpu.util exato\nconst cpuByHost = {};\nfor (const item of cpuItems) {\n  if (!cpuByHost[item.hostid] || item.key_ === 'system.cpu.util') {\n    cpuByHost[item.hostid] = item;\n  }\n}\n\n// Um item de memoria por host — prefere vm.memory.utilization, fallback vm.memory.size[pused]\nconst memByHost = {};\nfor (const item of memItemsRaw) {\n  const key = item.key_;\n  if (key === 'vm.memory.utilization') {\n    memByHost[item.hostid] = item;\n  } else if (key === 'vm.memory.size[pused]' && !memByHost[item.hostid]) {\n    memByHost[item.hostid] = item;\n  }\n}\n\nconst cpuItemids = Object.values(cpuByHost).map(i => i.itemid);\nconst memItemids = Object.values(memByHost).map(i => i.itemid);\n\nreturn [{\n  json: {\n    hosts: prep.hosts,\n    time_from: prep.time_from,\n    time_till: prep.time_till,\n    generated_at: prep.generated_at,\n    cpuByHost,\n    memByHost,\n    cpu_trend_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'trend.get', id: 4,\n      params: {\n        output: ['itemid', 'clock', 'value_avg'],\n        itemids: cpuItemids,\n        time_from: prep.time_from,\n        time_till: prep.time_till\n      }\n    }),\n    mem_trend_body: JSON.stringify({\n      jsonrpc: '2.0', method: 'trend.get', id: 5,\n      params: {\n        output: ['itemid', 'clock', 'value_avg'],\n        itemids: memItemids,\n        time_from: prep.time_from,\n        time_till: prep.time_till\n      }\n    })\n  }\n}];"
       },
       "id": "ghost-0007-0007-0007-000000000007",
+      "name": "Preparar Trend Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.cpu_trend_body }}",
+        "options": {}
+      },
+      "id": "ghost-0008-0008-0008-000000000008",
+      "name": "Buscar Trends CPU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Preparar Trend Queries').item.json.mem_trend_body }}",
+        "options": {}
+      },
+      "id": "ghost-0009-0009-0009-000000000009",
+      "name": "Buscar Trends Memória",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1900, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $('Preparar Trend Queries').item.json;\nconst cpuTrends = $('Buscar Trends CPU').item.json.result || [];\nconst memTrends = $json.result || [];\n\nconst CPU_THRESHOLD = 5;\nconst MEM_THRESHOLD = 20;\n\n// Inverte mapa itemid -> hostid\nconst cpuItemToHost = {};\nfor (const [hostid, item] of Object.entries(prep.cpuByHost)) {\n  cpuItemToHost[item.itemid] = hostid;\n}\nconst memItemToHost = {};\nfor (const [hostid, item] of Object.entries(prep.memByHost)) {\n  memItemToHost[item.itemid] = hostid;\n}\n\n// Media de CPU por host (ultimas 24h)\nconst cpuSums = {}, cpuCounts = {};\nfor (const t of cpuTrends) {\n  const hostid = cpuItemToHost[t.itemid];\n  if (!hostid) continue;\n  cpuSums[hostid]  = (cpuSums[hostid]  || 0) + parseFloat(t.value_avg);\n  cpuCounts[hostid] = (cpuCounts[hostid] || 0) + 1;\n}\n\n// Media de Memoria por host (ultimas 24h)\nconst memSums = {}, memCounts = {};\nfor (const t of memTrends) {\n  const hostid = memItemToHost[t.itemid];\n  if (!hostid) continue;\n  memSums[hostid]  = (memSums[hostid]  || 0) + parseFloat(t.value_avg);\n  memCounts[hostid] = (memCounts[hostid] || 0) + 1;\n}\n\nconst report = [];\nfor (const host of prep.hosts) {\n  const id = host.hostid;\n  const cpu = cpuCounts[id] ? Math.round((cpuSums[id] / cpuCounts[id]) * 10) / 10 : null;\n  const mem = memCounts[id] ? Math.round((memSums[id] / memCounts[id]) * 10) / 10 : null;\n  const hasData = cpu !== null && mem !== null;\n  const isGhost = hasData && cpu < CPU_THRESHOLD && mem < MEM_THRESHOLD;\n  report.push({ host: host.name, hostname: host.host, cpu, mem, hasData, isGhost });\n}\n\nconst ghosts = report.filter(r => r.isGhost);\nconst noData  = report.filter(r => !r.hasData);\n\nreturn [{ json: {\n  report, ghosts, noData,\n  total: prep.hosts.length,\n  CPU_THRESHOLD, MEM_THRESHOLD,\n  generated_at: prep.generated_at\n} }];"
+      },
+      "id": "ghost-0010-0010-0010-000000000010",
       "name": "Processar Fantasmas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 180]
+      "position": [2100, 180]
     },
     {
       "parameters": {
-        "jsCode": "const { ghosts, noData, total, CPU_THRESHOLD, MEM_THRESHOLD, generated_at } = $json;\n\nconst color = ghosts.length === 0 ? '00B050' : (ghosts.length > 5 ? 'FF0000' : 'FFA500');\n\nconst sections = [{\n  activityTitle: 'Relatorio de Hosts Fantasmas — ' + generated_at,\n  activitySubtitle: ghosts.length + ' fantasma(s) de ' + total + ' hosts monitorados',\n  facts: [\n    { name: 'Criterio',             value: 'CPU < ' + CPU_THRESHOLD + '% E Memoria < ' + MEM_THRESHOLD + '%' },\n    { name: 'Total monitorado',     value: String(total) },\n    { name: 'Hosts fantasmas',      value: String(ghosts.length) },\n    { name: 'Sem dados de metrica', value: String(noData.length) }\n  ],\n  markdown: true\n}];\n\nif (ghosts.length > 0) {\n  sections.push({\n    activityTitle: 'Hosts com Baixissimo Uso',\n    text: ghosts.map(g => '**' + g.host + '** — CPU: ' + g.cpu + '% | Mem usada: ' + g.mem + '%').join('\\n\\n'),\n    markdown: true\n  });\n}\n\nif (noData.length > 0) {\n  sections.push({\n    activityTitle: 'Sem Dados (agente inativo ou item nao configurado)',\n    text: noData.map(h => h.host).join(', '),\n    markdown: true\n  });\n}\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: color,\n      summary: 'Hosts fantasmas: ' + ghosts.length + ' de ' + total,\n      sections\n    })\n  }\n}];"
+        "jsCode": "const { ghosts, noData, total, CPU_THRESHOLD, MEM_THRESHOLD, generated_at } = $json;\n\nconst color = ghosts.length === 0 ? '00B050' : (ghosts.length > 5 ? 'FF0000' : 'FFA500');\n\nconst sections = [{\n  activityTitle: 'Relatorio de Hosts Fantasmas (media 24h) — ' + generated_at,\n  activitySubtitle: ghosts.length + ' fantasma(s) de ' + total + ' hosts monitorados',\n  facts: [\n    { name: 'Criterio',             value: 'CPU medio < ' + CPU_THRESHOLD + '% E Memoria media < ' + MEM_THRESHOLD + '%' },\n    { name: 'Total monitorado',     value: String(total) },\n    { name: 'Hosts fantasmas',      value: String(ghosts.length) },\n    { name: 'Sem dados de metrica', value: String(noData.length) }\n  ],\n  markdown: true\n}];\n\nif (ghosts.length > 0) {\n  sections.push({\n    activityTitle: 'Hosts com Baixissimo Uso',\n    text: ghosts.map(g => '**' + g.host + '** — CPU: ' + g.cpu + '% | Mem: ' + g.mem + '%').join('\\n\\n'),\n    markdown: true\n  });\n}\n\nif (noData.length > 0) {\n  sections.push({\n    activityTitle: 'Sem Dados (item nao encontrado ou tendencias sem historico)',\n    text: noData.map(h => h.host).join(', '),\n    markdown: true\n  });\n}\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: color,\n      summary: 'Hosts fantasmas: ' + ghosts.length + ' de ' + total,\n      sections\n    })\n  }\n}];"
       },
-      "id": "ghost-0008-0008-0008-000000000008",
+      "id": "ghost-0011-0011-0011-000000000011",
       "name": "Montar Relatório Teams",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 180]
+      "position": [2300, 180]
     },
     {
       "parameters": {
@@ -141,11 +195,11 @@
         "jsonBody": "={{ $json.teams_body }}",
         "options": {}
       },
-      "id": "ghost-0009-0009-0009-000000000009",
+      "id": "ghost-0012-0012-0012-000000000012",
       "name": "Teams — Relatório Fantasmas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2000, 180]
+      "position": [2500, 180]
     },
     {
       "parameters": {
@@ -161,7 +215,7 @@
         },
         "options": {}
       },
-      "id": "ghost-0010-0010-0010-000000000010",
+      "id": "ghost-0013-0013-0013-000000000013",
       "name": "Sem Hosts Monitorados",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -177,17 +231,26 @@
     },
     "Tem Hosts?": {
       "main": [
-        [{ "node": "Preparar Queries",        "type": "main", "index": 0 }],
-        [{ "node": "Sem Hosts Monitorados",   "type": "main", "index": 0 }]
+        [{ "node": "Preparar Item Queries",   "type": "main", "index": 0 }],
+        [{ "node": "Sem Hosts Monitorados",    "type": "main", "index": 0 }]
       ]
     },
-    "Preparar Queries": {
-      "main": [[{ "node": "Zabbix API — Buscar CPU", "type": "main", "index": 0 }]]
+    "Preparar Item Queries": {
+      "main": [[{ "node": "Buscar Items CPU", "type": "main", "index": 0 }]]
     },
-    "Zabbix API — Buscar CPU": {
-      "main": [[{ "node": "Zabbix API — Buscar Memória", "type": "main", "index": 0 }]]
+    "Buscar Items CPU": {
+      "main": [[{ "node": "Buscar Items Memória", "type": "main", "index": 0 }]]
     },
-    "Zabbix API — Buscar Memória": {
+    "Buscar Items Memória": {
+      "main": [[{ "node": "Preparar Trend Queries", "type": "main", "index": 0 }]]
+    },
+    "Preparar Trend Queries": {
+      "main": [[{ "node": "Buscar Trends CPU", "type": "main", "index": 0 }]]
+    },
+    "Buscar Trends CPU": {
+      "main": [[{ "node": "Buscar Trends Memória", "type": "main", "index": 0 }]]
+    },
+    "Buscar Trends Memória": {
       "main": [[{ "node": "Processar Fantasmas", "type": "main", "index": 0 }]]
     },
     "Processar Fantasmas": {
