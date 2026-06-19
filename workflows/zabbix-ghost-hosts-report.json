@@ -297,6 +297,41 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { ghosts, top10, candidates, total, generated_at } = $json;\n\nconst now = new Date();\nif (now.getDay() !== 1) return [];\n\nconst tz = { timeZone: 'America/Sao_Paulo' };\nconst staticData = $getWorkflowStaticData('global');\nconst snapshots = staticData['ghost_weekly_snapshots'] || [];\n\nconst today = now.toLocaleDateString('pt-BR', tz);\nconst weekNum = Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / (7 * 86400000));\nconst weekLabel = 'Semana ' + weekNum + '/' + now.getFullYear();\n\nconst currentGhostNames = new Set(ghosts.map(h => h.hostname));\nconst lastWeek = snapshots[0];\nconst lastGhostNames = new Set(lastWeek?.ghostHosts || []);\n\nconst newGhosts  = ghosts.filter(h => !lastGhostNames.has(h.hostname));\nconst recovered  = (lastWeek?.ghostHosts || []).filter(hn => !currentGhostNames.has(hn));\nconst chronic    = ghosts.filter(h => lastGhostNames.has(h.hostname));\nconst weekCounts = [ghosts.length, ...snapshots.map(s => s.ghostCount)].slice(0, 4);\nconst trend      = weekCounts.length >= 2 ? weekCounts[0] - weekCounts[1] : 0;\n\nconst newSnap = {\n  date: today, weekLabel,\n  ghostCount: ghosts.length,\n  ghostHosts: ghosts.map(h => h.hostname),\n  top10: top10.map(h => h.hostname),\n  candidateHosts: candidates.map(h => h.hostname),\n  totalMonitored: total\n};\nsnapshots.unshift(newSnap);\nif (snapshots.length > 4) snapshots.pop();\nstaticData['ghost_weekly_snapshots'] = snapshots;\n\nreturn [{ json: { weekLabel, newGhosts, recovered, chronic, trend, weekCounts, top10, candidates, total, generated_at, snapshots: snapshots.slice(0, 4) } }];"
+      },
+      "id": "ghost-semanal-01-01-01-000000000001",
+      "name": "Verificar Segunda-Feira",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2700, 540]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { weekLabel, newGhosts, recovered, chronic, trend, weekCounts, top10, candidates, total, generated_at, snapshots } = $json;\n\nconst pct = v => v !== null && v !== undefined ? parseFloat(v).toFixed(1) + '%' : 'N/D';\nconst trendArrow = trend > 0 ? '▲ +' + trend + ' vs semana anterior' : trend < 0 ? '▼ ' + trend + ' vs semana anterior' : '→ igual a semana anterior';\nconst trendColor = trend > 0 ? 'Attention' : trend < 0 ? 'Good' : 'Default';\n\nconst body = [];\n\nbody.push({ type: 'TextBlock', text: '📊 Resumo Semanal — Hosts Fantasmas', size: 'ExtraLarge', weight: 'Bolder', color: trend > 0 ? 'Attention' : 'Warning', wrap: true });\nbody.push({ type: 'TextBlock', text: weekLabel + ' · ' + generated_at, size: 'Small', isSubtle: true, spacing: 'None' });\n\nbody.push({\n  type: 'ColumnSet', spacing: 'Medium',\n  columns: [\n    { type: 'Column', width: 'stretch', items: [ { type: 'TextBlock', text: String(total), size: 'ExtraLarge', weight: 'Bolder', horizontalAlignment: 'Center' }, { type: 'TextBlock', text: 'Monitorados', size: 'Small', horizontalAlignment: 'Center', isSubtle: true, spacing: 'None' } ] },\n    { type: 'Column', width: 'stretch', items: [ { type: 'TextBlock', text: String(weekCounts[0] || 0), size: 'ExtraLarge', weight: 'Bolder', horizontalAlignment: 'Center', color: (weekCounts[0] || 0) > 0 ? 'Attention' : 'Good' }, { type: 'TextBlock', text: 'Fantasmas', size: 'Small', horizontalAlignment: 'Center', isSubtle: true, spacing: 'None' } ] },\n    { type: 'Column', width: 'stretch', items: [ { type: 'TextBlock', text: String(newGhosts.length), size: 'ExtraLarge', weight: 'Bolder', horizontalAlignment: 'Center', color: newGhosts.length > 0 ? 'Attention' : 'Good' }, { type: 'TextBlock', text: 'Novos', size: 'Small', horizontalAlignment: 'Center', isSubtle: true, spacing: 'None' } ] },\n    { type: 'Column', width: 'stretch', items: [ { type: 'TextBlock', text: String(recovered.length), size: 'ExtraLarge', weight: 'Bolder', horizontalAlignment: 'Center', color: recovered.length > 0 ? 'Good' : 'Default' }, { type: 'TextBlock', text: 'Recuperados', size: 'Small', horizontalAlignment: 'Center', isSubtle: true, spacing: 'None' } ] }\n  ]\n});\n\nbody.push({ type: 'TextBlock', text: trendArrow, size: 'Medium', weight: 'Bolder', color: trendColor, spacing: 'Medium' });\n\nif (weekCounts.length >= 2) {\n  const maxVal = Math.max(...weekCounts, 1);\n  const bars = ['▁','▂','▃','▄','▅','▆','▇','█'];\n  const barStr = weekCounts.slice().reverse().map(v => bars[Math.min(7, Math.floor((v / maxVal) * 7))]).join('');\n  const labels = snapshots.slice().reverse().map(s => s.weekLabel.replace('Semana ', 'S')).join(' → ');\n  body.push({ type: 'TextBlock', text: barStr + '  (' + labels + ')', size: 'Small', isSubtle: true, wrap: true, spacing: 'None' });\n}\n\nif (newGhosts.length > 0) {\n  body.push({ type: 'TextBlock', text: '🔴 Novos Fantasmas (' + newGhosts.length + ')', size: 'Medium', weight: 'Bolder', color: 'Attention', spacing: 'Large' });\n  body.push({ type: 'FactSet', facts: newGhosts.map(h => ({ title: h.host, value: 'Score: ' + (h.score !== null ? h.score.toFixed(1) : 'N/D') + '  |  CPU: ' + pct(h.cpu) + '  |  Mem: ' + pct(h.mem) })) });\n}\n\nif (recovered.length > 0) {\n  body.push({ type: 'TextBlock', text: '✅ Recuperados (' + recovered.length + ')', size: 'Medium', weight: 'Bolder', color: 'Good', spacing: 'Large' });\n  body.push({ type: 'FactSet', facts: recovered.map(hn => ({ title: hn, value: 'Voltou a ter atividade esta semana' })) });\n}\n\nif (chronic.length > 0) {\n  body.push({ type: 'TextBlock', text: '⏳ Cronicos — 2+ semanas fantasma (' + chronic.length + ')', size: 'Medium', weight: 'Bolder', color: 'Warning', spacing: 'Large' });\n  body.push({ type: 'FactSet', facts: chronic.map(h => ({ title: h.host, value: 'Score: ' + (h.score !== null ? h.score.toFixed(1) : 'N/D') + '  |  ' + (h.consecutiveGhostDays || 0) + ' dias consecutivos' })) });\n}\n\nif (candidates && candidates.length > 0) {\n  body.push({ type: 'TextBlock', text: '⚠ Candidatos para Desativacao (' + candidates.length + ')', size: 'Medium', weight: 'Bolder', color: 'Warning', spacing: 'Large' });\n  body.push({ type: 'FactSet', facts: candidates.map(h => ({ title: h.host, value: h.consecutiveGhostDays + ' dias consecutivos — tag aplicada no Zabbix' })) });\n}\n\nif (newGhosts.length === 0 && (weekCounts[0] || 0) === 0) {\n  body.push({ type: 'TextBlock', text: '✅ Nenhum host fantasma esta semana. Frota saudavel!', size: 'Medium', weight: 'Bolder', color: 'Good', spacing: 'Large' });\n}\n\nreturn [{ json: { teams_body: JSON.stringify({ type: 'message', attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', contentUrl: null, content: { '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json', type: 'AdaptiveCard', version: '1.4', body } }] }) } }];"
+      },
+      "id": "ghost-semanal-02-02-02-000000000002",
+      "name": "Montar Relatório Semanal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2900, 540]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "ghost-semanal-03-03-03-000000000003",
+      "name": "Teams — Relatório Semanal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3100, 540]
     }
   ],
   "connections": {
@@ -339,7 +374,8 @@
     "Processar Fantasmas": {
       "main": [[
         { "node": "Montar Relatório Teams",    "type": "main", "index": 0 },
-        { "node": "Preparar Tags Candidatos",  "type": "main", "index": 0 }
+        { "node": "Preparar Tags Candidatos",  "type": "main", "index": 0 },
+        { "node": "Verificar Segunda-Feira",   "type": "main", "index": 0 }
       ]]
     },
     "Preparar Tags Candidatos": {
@@ -347,6 +383,12 @@
     },
     "Montar Relatório Teams": {
       "main": [[{ "node": "Teams — Relatório Fantasmas", "type": "main", "index": 0 }]]
+    },
+    "Verificar Segunda-Feira": {
+      "main": [[{ "node": "Montar Relatório Semanal", "type": "main", "index": 0 }]]
+    },
+    "Montar Relatório Semanal": {
+      "main": [[{ "node": "Teams — Relatório Semanal", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},
