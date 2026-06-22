@@ -401,7 +401,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [2300, 180]
-    },
+    }
   ],
   "connections": {
     "Webhook Zabbix": {
