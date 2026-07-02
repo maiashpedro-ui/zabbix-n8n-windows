@@ -1,0 +1,239 @@
+{
+  "id": "prd08h-0001-0001-0001-000000000001",
+  "name": "Zabbix — Iniciar Serviços PRD às 08h",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1-5" }]
+        }
+      },
+      "id": "p08-0001-0001-0001-000000000001",
+      "name": "Agendamento 08h Dias Úteis",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\"],\n    \"search\": { \"host\": \"PRD-\" },\n    \"searchByAny\": false\n  },\n  \"id\": 1\n}",
+        "options": {}
+      },
+      "id": "p08-0002-0002-0002-000000000002",
+      "name": "Zabbix API — Buscar Hosts PRD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const hosts = $json.result || [];\n\nif (hosts.length === 0) {\n  throw new Error('Nenhum host PRD encontrado no Zabbix');\n}\n\nconst hostids = hosts.map(h => parseInt(h.hostid));\n\nreturn [{\n  json: {\n    trigger_body: JSON.stringify({\n      jsonrpc: '2.0',\n      method: 'trigger.get',\n      params: {\n        output: ['triggerid', 'description', 'value'],\n        hostids,\n        only_true: true,\n        monitored: true,\n        active: true,\n        skipDependent: true,\n        selectItems: ['key_'],\n        selectHosts: ['hostid', 'host']\n      },\n      id: 2\n    })\n  }\n}];"
+      },
+      "id": "p08-0003-0003-0003-000000000003",
+      "name": "Preparar Busca de Triggers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.trigger_body }}",
+        "options": {}
+      },
+      "id": "p08-0004-0004-0004-000000000004",
+      "name": "Zabbix API — Buscar Triggers em Problema",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggers = $json.result || [];\nconst scriptid = parseInt($env.ZABBIX_SCRIPT_ID);\n\nconst PRD_HOSTS = [\n  'PRD-APRM', 'PRD-APRM02', 'PRD-BDRM', 'PRD-FLUIG', 'PRD-PORTAL',\n  'PRD-RMJOBS01', 'PRD-RMJOBS02', 'PRD-RMJOBS03', 'PRD-RMUPDATE',\n  'PRD-TAF', 'PRD-TLS', 'PRD-TSS'\n];\n\nconst items = [];\n\nfor (const t of triggers) {\n  const host = (t.hosts || [])[0];\n  if (!host) continue;\n\n  const isPRD = PRD_HOSTS.some(p => p.toUpperCase() === host.host.toUpperCase());\n  if (!isPRD) continue;\n\n  for (const item of (t.items || [])) {\n    const match = (item.key_ || '').match(/^service\\.info\\[[\"\\'`]?([^\"\\'`\\],]+)/i);\n    if (!match) continue;\n\n    const service_name = match[1].trim();\n\n    items.push({\n      json: {\n        hostid: parseInt(host.hostid),\n        host: host.host,\n        service_name,\n        trigger_name: t.description,\n        execute_body: JSON.stringify({\n          jsonrpc: '2.0',\n          method: 'script.execute',\n          params: { scriptid, hostid: parseInt(host.hostid), manualinput: service_name },\n          id: 3\n        })\n      }\n    });\n  }\n}\n\nif (items.length === 0) {\n  return [{ json: { _vazio: true } }];\n}\n\nreturn items;"
+      },
+      "id": "p08-0005-0005-0005-000000000005",
+      "name": "Filtrar Serviços Parados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "id": "cond-vazio",
+              "leftValue": "={{ $json._vazio }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p08-0006-0006-0006-000000000006",
+      "name": "Tem Serviços Parados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.execute_body }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "p08-0007-0007-0007-000000000007",
+      "name": "Zabbix API — Executar Reinício",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "p08-0008-0008-0008-000000000008",
+      "name": "Aguardar 15s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1700, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resultado = $json.result || {};\nconst running = (resultado.value || '').includes('Running');\nconst prevItem = $('Filtrar Serviços Parados').item.json;\n\nreturn [{\n  json: {\n    host: prevItem.host,\n    service_name: prevItem.service_name,\n    status: running ? 'iniciado' : 'falha',\n    detalhe: resultado.value || resultado.response || 'sem resposta'\n  }\n}];"
+      },
+      "id": "p08-0009-0009-0009-000000000009",
+      "name": "Verificar Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1900, 180]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "p08-0010-0010-0010-000000000010",
+      "name": "Agregar Resultados",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [2100, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const todos = $json.data || [];\nconst now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n\nconst iniciados = todos.filter(i => i.status === 'iniciado').length;\nconst falhas    = todos.filter(i => i.status === 'falha').length;\n\nconst facts = todos.map(i => ({\n  name: i.host + ' / ' + i.service_name,\n  value: i.status === 'iniciado' ? 'Iniciado com sucesso' : 'FALHA — ' + i.detalhe\n}));\n\nreturn [{\n  json: {\n    teams_body: JSON.stringify({\n      '@type': 'MessageCard',\n      '@context': 'http://schema.org/extensions',\n      themeColor: falhas > 0 ? 'FF0000' : '00B050',\n      summary: 'Inicializacao 08h: ' + iniciados + ' servicos iniciados, ' + falhas + ' falha(s)',\n      sections: [{\n        activityTitle: 'Inicializacao Automatica 08h — Servidores PRD',\n        activitySubtitle: now + ' | ' + iniciados + ' iniciados / ' + falhas + ' falhas',\n        facts,\n        markdown: true\n      }]\n    })\n  }\n}];"
+      },
+      "id": "p08-0011-0011-0011-000000000011",
+      "name": "Montar Teams Resumo 08h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2300, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.teams_body }}",
+        "options": {}
+      },
+      "id": "p08-0012-0012-0012-000000000012",
+      "name": "Teams — Relatório 08h",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2500, 180]
+    }
+  ],
+  "connections": {
+    "Agendamento 08h Dias Úteis": {
+      "main": [[{ "node": "Zabbix API — Buscar Hosts PRD", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Buscar Hosts PRD": {
+      "main": [[{ "node": "Preparar Busca de Triggers", "type": "main", "index": 0 }]]
+    },
+    "Preparar Busca de Triggers": {
+      "main": [[{ "node": "Zabbix API — Buscar Triggers em Problema", "type": "main", "index": 0 }]]
+    },
+    "Zabbix API — Buscar Triggers em Problema": {
+      "main": [[{ "node": "Filtrar Serviços Parados", "type": "main", "index": 0 }]]
+    },
+    "Filtrar Serviços Parados": {
+      "main": [[{ "node": "Tem Serviços Parados?", "type": "main", "index": 0 }]]
+    },
+    "Tem Serviços Parados?": {
+      "main": [
+        [{ "node": "Zabbix API — Executar Reinício", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Zabbix API — Executar Reinício": {
+      "main": [[{ "node": "Aguardar 15s", "type": "main", "index": 0 }]]
+    },
+    "Aguardar 15s": {
+      "main": [[{ "node": "Verificar Resultado", "type": "main", "index": 0 }]]
+    },
+    "Verificar Resultado": {
+      "main": [[{ "node": "Agregar Resultados", "type": "main", "index": 0 }]]
+    },
+    "Agregar Resultados": {
+      "main": [[{ "node": "Montar Teams Resumo 08h", "type": "main", "index": 0 }]]
+    },
+    "Montar Teams Resumo 08h": {
+      "main": [[{ "node": "Teams — Relatório 08h", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "zabbix" },
+    { "name": "windows" },
+    { "name": "remediacao" },
+    { "name": "agendamento" }
+  ],
+  "triggerCount": 0,
+  "versionId": "prd08h-0001-0001-0001-000000000001"
+}
