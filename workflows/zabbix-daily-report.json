@@ -56,7 +56,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
+        "url": "={{ $env.TEAMS_INFRA_RELATORIOS }}",
         "sendBody": true,
         "contentType": "json",
         "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"0076D7\",\n  \"summary\": \"Relatório Diário de Automação Zabbix — {{ $json.date }}\",\n  \"title\": \"Relatório de Remediações Automáticas — {{ $json.date }}\",\n  \"sections\": [\n    {\n      \"facts\": [\n        { \"name\": \"Total de alertas\", \"value\": \"{{ $json.total }}\" },\n        { \"name\": \"Remediados automaticamente\", \"value\": \"{{ $json.totalRemediated }}\" },\n        { \"name\": \"Requereram intervenção manual\", \"value\": \"{{ $json.totalPending }}\" },\n        { \"name\": \"Taxa de automação\", \"value\": \"{{ $json.total > 0 ? Math.round($json.totalRemediated / $json.total * 100) : 0 }}%\" }\n      ]\n    }\n  ]\n}",
@@ -67,12 +67,29 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_RELATORIOS }}",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ $('Teams — Enviar Relatório').item.json }}",
+        "options": {}
+      },
+      "id": "daily-sis-0001-0001-0001-000000000001",
+      "name": "Sistemas — Enviar Relatório",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300],
+      "continueOnFail": true
     }
   ],
   "connections": {
     "Diariamente às 08h":         { "main": [[{ "node": "Buscar Eventos 24h — Zabbix API", "type": "main", "index": 0 }]] },
     "Buscar Eventos 24h — Zabbix API": { "main": [[{ "node": "Processar Estatísticas", "type": "main", "index": 0 }]] },
-    "Processar Estatísticas":     { "main": [[{ "node": "Teams — Enviar Relatório", "type": "main", "index": 0 }]] }
+    "Processar Estatísticas":     { "main": [[{ "node": "Teams — Enviar Relatório", "type": "main", "index": 0 }]] },
+    "Teams — Enviar Relatório":   { "main": [[{ "node": "Sistemas — Enviar Relatório", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": {

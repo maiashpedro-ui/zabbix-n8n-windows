@@ -266,7 +266,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
+        "url": "={{ $env.TEAMS_INFRA_RELATORIOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -277,6 +277,39 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [2900, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_RELATORIOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Relatório Semanal').item.json.teams_body }}",
+
+        "options": {}
+      },
+      "id": "ghost-sis-0002-0002-0002-000000000002",
+      "name": "Sistemas — Relatório Semanal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3300, 540],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_RELATORIOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Relatório Teams').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "ghost-sis-0001-0001-0001-000000000001",
+      "name": "Sistemas — Relatório Fantasmas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3100, 180],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -321,7 +354,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
+        "url": "={{ $env.TEAMS_INFRA_RELATORIOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -384,11 +417,17 @@
     "Montar Relatório Teams": {
       "main": [[{ "node": "Teams — Relatório Fantasmas", "type": "main", "index": 0 }]]
     },
+    "Teams — Relatório Fantasmas": {
+      "main": [[{ "node": "Sistemas — Relatório Fantasmas", "type": "main", "index": 0 }]]
+    },
     "Verificar Segunda-Feira": {
       "main": [[{ "node": "Montar Relatório Semanal", "type": "main", "index": 0 }]]
     },
     "Montar Relatório Semanal": {
       "main": [[{ "node": "Teams — Relatório Semanal", "type": "main", "index": 0 }]]
+    },
+    "Teams — Relatório Semanal": {
+      "main": [[{ "node": "Sistemas — Relatório Semanal", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},

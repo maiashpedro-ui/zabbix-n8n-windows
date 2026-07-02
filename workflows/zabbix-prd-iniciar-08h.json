@@ -180,6 +180,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [2500, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_SERVICOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Teams Resumo 08h').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "p08-sis-0001-0001-0001-000000000001",
+      "name": "Sistemas — Relatório 08h",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2720, 180],
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -218,6 +234,9 @@
     },
     "Montar Teams Resumo 08h": {
       "main": [[{ "node": "Teams — Relatório 08h", "type": "main", "index": 0 }]]
+    },
+    "Teams — Relatório 08h": {
+      "main": [[{ "node": "Sistemas — Relatório 08h", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},

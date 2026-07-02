@@ -77,7 +77,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
+        "url": "={{ $env.TEAMS_INFRA_RELATORIOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -88,6 +88,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [1300, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_RELATORIOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Alerta Teams').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "hc-sis-0001-0001-0001-000000000001",
+      "name": "Sistemas — Alerta Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 180],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -128,6 +144,9 @@
     },
     "Montar Alerta Teams": {
       "main": [[{ "node": "Teams — Alerta Health Check", "type": "main", "index": 0 }]]
+    },
+    "Teams — Alerta Health Check": {
+      "main": [[{ "node": "Sistemas — Alerta Health Check", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},

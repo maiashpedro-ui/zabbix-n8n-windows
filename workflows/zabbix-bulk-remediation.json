@@ -137,6 +137,22 @@
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_SERVICOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Relatório').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "bulk-sis-0001-0001-0001-000000000001",
+      "name": "Sistemas — Relatório de Remediação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
         "assignments": {
           "assignments": [
             {
@@ -183,6 +199,9 @@
     },
     "Montar Relatório": {
       "main": [[{ "node": "Teams — Relatório de Remediação", "type": "main", "index": 0 }]]
+    },
+    "Teams — Relatório de Remediação": {
+      "main": [[{ "node": "Sistemas — Relatório de Remediação", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},

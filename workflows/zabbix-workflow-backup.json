@@ -63,7 +63,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
+        "url": "={{ $env.TEAMS_INFRA_RELATORIOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -74,6 +74,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [920, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_RELATORIOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Processar e Montar Relatório').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "bkp-sis-0001-0001-0001-000000000001",
+      "name": "Sistemas — Relatório de Backup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1140, 380],
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -85,7 +101,8 @@
     },
     "n8n API — Listar Workflows":   { "main": [[{ "node": "Processar e Montar Relatório", "type": "main", "index": 0 }]] },
     "n8n API — Execuções com Erro": { "main": [[{ "node": "Processar e Montar Relatório", "type": "main", "index": 0 }]] },
-    "Processar e Montar Relatório": { "main": [[{ "node": "Teams — Relatório de Backup",  "type": "main", "index": 0 }]] }
+    "Processar e Montar Relatório": { "main": [[{ "node": "Teams — Relatório de Backup",  "type": "main", "index": 0 }]] },
+    "Teams — Relatório de Backup":  { "main": [[{ "node": "Sistemas — Relatório de Backup", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": {
