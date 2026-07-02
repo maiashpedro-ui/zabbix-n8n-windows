@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
   "name": "Zabbix — Remediação de Serviços Windows",
   "nodes": [
@@ -105,7 +105,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -226,7 +226,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -356,7 +356,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -403,7 +403,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -458,6 +458,159 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [2700, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\"],\n    \"selectGroups\": [\"name\"],\n    \"filter\": { \"host\": [\"{{ $('Normalizar Campos').item.json.host }}\"] }\n  },\n  \"id\": 10\n}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "rem-totvs-http-0001",
+      "name": "Buscar Grupo Host",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 520],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const groups = $json.result?.[0]?.groups || [];\nconst is_totvs = groups.some(g => g.name === 'TOTVS');\nconst norm = $('Normalizar Campos').item.json;\nreturn [{ json: { ...norm, is_totvs } }];"
+      },
+      "id": "rem-totvs-code-0002",
+      "name": "Extrair is_totvs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 520]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{ "id": "c-totvs", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rem-totvs-if-flap",
+      "name": "É TOTVS? (Flap)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1700, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_SERVICOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Teams Flap').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "rem-totvs-send-flap",
+      "name": "Sistemas — Alerta Flap",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1900, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{ "id": "c-totvs", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rem-totvs-if-rest",
+      "name": "É TOTVS? (Restrição)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2500, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_SERVICOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Teams Restrição').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "rem-totvs-send-rest",
+      "name": "Sistemas — Alerta Restrição",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2700, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{ "id": "c-totvs", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rem-totvs-if-suc",
+      "name": "É TOTVS? (Sucesso)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3700, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_SERVICOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Teams Sucesso').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "rem-totvs-send-suc",
+      "name": "Sistemas — Reinício com Sucesso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3900, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{ "id": "c-totvs", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rem-totvs-if-fal",
+      "name": "É TOTVS? (Falha)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3700, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_SISTEMAS_SERVICOS }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Montar Teams Falha').item.json.teams_body }}",
+        "options": {}
+      },
+      "id": "rem-totvs-send-fal",
+      "name": "Sistemas — Escalada de Falha",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3900, 420]
     }
   ],
   "connections": {
@@ -472,9 +625,15 @@
     },
     "É um PROBLEMA?": {
       "main": [
-        [{ "node": "Verificar Anti-Flap", "type": "main", "index": 0 }],
-        [{ "node": "Log Recuperação",     "type": "main", "index": 0 }]
+        [{ "node": "Buscar Grupo Host", "type": "main", "index": 0 }],
+        [{ "node": "Log Recuperação",   "type": "main", "index": 0 }]
       ]
+    },
+    "Buscar Grupo Host": {
+      "main": [[{ "node": "Extrair is_totvs", "type": "main", "index": 0 }]]
+    },
+    "Extrair is_totvs": {
+      "main": [[{ "node": "Verificar Anti-Flap", "type": "main", "index": 0 }]]
     },
     "Verificar Anti-Flap": {
       "main": [[{ "node": "Flap Detectado?", "type": "main", "index": 0 }]]
@@ -487,6 +646,12 @@
     },
     "Montar Teams Flap": {
       "main": [[{ "node": "Teams — Alerta Flap", "type": "main", "index": 0 }]]
+    },
+    "Teams — Alerta Flap": {
+      "main": [[{ "node": "É TOTVS? (Flap)", "type": "main", "index": 0 }]]
+    },
+    "É TOTVS? (Flap)": {
+      "main": [[{ "node": "Sistemas — Alerta Flap", "type": "main", "index": 0 }], []]
     },
     "Zabbix API — Buscar Host": {
       "main": [[{ "node": "Em Manutenção?", "type": "main", "index": 0 }]]
@@ -508,6 +673,12 @@
     },
     "Montar Teams Restrição": {
       "main": [[{ "node": "Teams — Alerta Restrição", "type": "main", "index": 0 }]]
+    },
+    "Teams — Alerta Restrição": {
+      "main": [[{ "node": "É TOTVS? (Restrição)", "type": "main", "index": 0 }]]
+    },
+    "É TOTVS? (Restrição)": {
+      "main": [[{ "node": "Sistemas — Alerta Restrição", "type": "main", "index": 0 }], []]
     },
     "Preparar Script Execute": {
       "main": [[{ "node": "Buscar Log Windows", "type": "main", "index": 0 }]]
@@ -533,11 +704,23 @@
     "Montar Teams Sucesso": {
       "main": [[{ "node": "Teams — Reinício com Sucesso", "type": "main", "index": 0 }]]
     },
+    "Teams — Reinício com Sucesso": {
+      "main": [[{ "node": "É TOTVS? (Sucesso)", "type": "main", "index": 0 }]]
+    },
+    "É TOTVS? (Sucesso)": {
+      "main": [[{ "node": "Sistemas — Reinício com Sucesso", "type": "main", "index": 0 }], []]
+    },
     "Zabbix API — Comentar Evento (Falha)": {
       "main": [[{ "node": "Montar Teams Falha", "type": "main", "index": 0 }]]
     },
     "Montar Teams Falha": {
       "main": [[{ "node": "Teams — Escalada de Falha", "type": "main", "index": 0 }]]
+    },
+    "Teams — Escalada de Falha": {
+      "main": [[{ "node": "É TOTVS? (Falha)", "type": "main", "index": 0 }]]
+    },
+    "É TOTVS? (Falha)": {
+      "main": [[{ "node": "Sistemas — Escalada de Falha", "type": "main", "index": 0 }], []]
     }
   },
   "pinData": {},

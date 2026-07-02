@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "c3d4e5f6-a7b8-9012-cdef-345678901234",
   "name": "Zabbix — Disco Cheio e Host Indisponível",
   "nodes": [
@@ -96,7 +96,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\"],\n    \"filter\": { \"host\": [\"{{ $('Normalizar Campos').item.json.host }}\"] }\n  },\n  \"id\": 1\n}",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"host.get\",\n  \"params\": {\n    \"output\": [\"hostid\", \"host\"],\n    \"selectGroups\": [\"name\"],\n    \"filter\": { \"host\": [\"{{ $('Normalizar Campos').item.json.host }}\"] }\n  },\n  \"id\": 1\n}",
         "options": {}
       },
       "id": "disk-new-0001-0001-0001-000000000001",
@@ -140,7 +140,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_HARDWARE }}",
+        "url": "={{ $env.TEAMS_INFRA_HARDWARE }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -155,7 +155,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_DISPONIBILIDADE }}",
+        "url": "={{ $env.TEAMS_INFRA_DISPONIBILIDADE }}",
         "sendBody": true,
         "contentType": "json",
         "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"CC0000\",\n  \"summary\": \"HOST INDISPONIVEL — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"HOST INACESSIVEL\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }}\",\n    \"facts\": [\n      { \"name\": \"Detalhe\",    \"value\": \"{{ $('Normalizar Campos').item.json.detail }}\" },\n      { \"name\": \"Trigger\",    \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Acao\",       \"value\": \"Verificar conectividade de rede, status do servidor e coletor Zabbix\" }\n    ],\n    \"markdown\": true\n  }]\n}",
@@ -200,6 +200,46 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [460, 500]
+    },
+    {
+      "parameters": { "jsCode": "const groups = $json.result?.[0]?.groups || [];\nconst is_totvs = groups.some(g => g.name === 'TOTVS');\nconst norm = $('Normalizar Campos').item.json;\nreturn [{ json: { ...norm, is_totvs, hostid: $json.result?.[0]?.hostid } }];" },
+      "id": "disk-totvs-code-0001",
+      "name": "Extrair is_totvs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 520]
+    },
+    {
+      "parameters": { "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "id": "c-t", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }], "combinator": "and" }, "options": {} },
+      "id": "disk-totvs-if-disk",
+      "name": "É TOTVS? (Disco)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1700, 60]
+    },
+    {
+      "parameters": { "method": "POST", "url": "={{ $env.TEAMS_SISTEMAS_HARDWARE }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $('Montar Alerta Disco').item.json.teams_body }}", "options": {} },
+      "id": "disk-totvs-send-disk",
+      "name": "Sistemas — Alerta Disco",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1900, 60]
+    },
+    {
+      "parameters": { "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "id": "c-t", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }], "combinator": "and" }, "options": {} },
+      "id": "disk-totvs-if-host",
+      "name": "É TOTVS? (Host)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 440]
+    },
+    {
+      "parameters": { "method": "POST", "url": "={{ $env.TEAMS_SISTEMAS_DISPONIBILIDADE }}", "sendBody": true, "contentType": "json", "body": "={{ JSON.stringify({ '@type': 'MessageCard', '@context': 'http://schema.org/extensions', themeColor: 'CC0000', summary: 'HOST INDISPONIVEL — ' + $('Normalizar Campos').item.json.host, sections: [{ activityTitle: 'HOST INACESSIVEL', activitySubtitle: $('Normalizar Campos').item.json.host, facts: [{ name: 'Detalhe', value: $('Normalizar Campos').item.json.detail }, { name: 'Trigger', value: $('Normalizar Campos').item.json.trigger_name }, { name: 'Severidade', value: $('Normalizar Campos').item.json.severity }], markdown: true }] }) }}", "options": {} },
+      "id": "disk-totvs-send-host",
+      "name": "Sistemas — Host Indisponível",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 440]
     }
   ],
   "connections": {
@@ -212,15 +252,20 @@
     },
     "Tipo de Alerta": {
       "main": [
-        [{ "node": "Buscar Host ID",          "type": "main", "index": 0 }],
-        [{ "node": "Teams — Host Indisponível","type": "main", "index": 0 }]
+        [{ "node": "Buscar Host ID",           "type": "main", "index": 0 }],
+        [{ "node": "Teams — Host Indisponível", "type": "main", "index": 0 }]
       ]
     },
-    "Buscar Host ID":           { "main": [[{ "node": "Buscar Items Disco Detalhe", "type": "main", "index": 0 }]] },
-    "Buscar Items Disco Detalhe": { "main": [[{ "node": "Montar Alerta Disco",       "type": "main", "index": 0 }]] },
-    "Montar Alerta Disco":      { "main": [[{ "node": "Teams — Alerta Disco",        "type": "main", "index": 0 }]] },
-    "Teams — Alerta Disco":     { "main": [[{ "node": "Zabbix — Comentar Evento",   "type": "main", "index": 0 }]] },
-    "Teams — Host Indisponível":{ "main": [[{ "node": "Zabbix — Comentar Evento",   "type": "main", "index": 0 }]] }
+    "Buscar Host ID":             { "main": [[{ "node": "Extrair is_totvs",          "type": "main", "index": 0 }]] },
+    "Extrair is_totvs":           { "main": [[{ "node": "Buscar Items Disco Detalhe", "type": "main", "index": 0 }]] },
+    "Buscar Items Disco Detalhe": { "main": [[{ "node": "Montar Alerta Disco",        "type": "main", "index": 0 }]] },
+    "Montar Alerta Disco":        { "main": [[{ "node": "Teams — Alerta Disco",       "type": "main", "index": 0 }]] },
+    "Teams — Alerta Disco":       { "main": [[{ "node": "É TOTVS? (Disco)",           "type": "main", "index": 0 }]] },
+    "É TOTVS? (Disco)":           { "main": [[{ "node": "Sistemas — Alerta Disco",    "type": "main", "index": 0 }], [{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
+    "Sistemas — Alerta Disco":    { "main": [[{ "node": "Zabbix — Comentar Evento",   "type": "main", "index": 0 }]] },
+    "Teams — Host Indisponível":  { "main": [[{ "node": "É TOTVS? (Host)",            "type": "main", "index": 0 }]] },
+    "É TOTVS? (Host)":            { "main": [[{ "node": "Sistemas — Host Indisponível","type": "main", "index": 0 }], [{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
+    "Sistemas — Host Indisponível":{ "main": [[{ "node": "Zabbix — Comentar Evento",  "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": {

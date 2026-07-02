@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "prd08h-0001-0001-0001-000000000001",
   "name": "Zabbix — Iniciar Serviços PRD às 08h",
   "nodes": [
@@ -169,7 +169,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",

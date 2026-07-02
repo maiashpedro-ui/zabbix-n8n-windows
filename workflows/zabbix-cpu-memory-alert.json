@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "a2b3c4d5-e6f7-8901-bcde-f23456789012",
   "name": "Zabbix — Alerta de CPU e Memória",
   "nodes": [
@@ -109,7 +109,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "contentType": "json",
         "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF6600\",\n  \"summary\": \"CPU Alta — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"CPU Alta Detectada\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Uso de CPU\", \"value\": \"{{ $('Normalizar Campos').item.json.metric_value }}%\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Recomendação\", \"value\": \"Verificar processos em execução via Gerenciador de Tarefas\" }\n    ],\n    \"markdown\": true\n  }]\n}",
@@ -124,7 +124,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "contentType": "json",
         "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF0000\",\n  \"summary\": \"Memória Baixa — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"Memória Baixa Detectada\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Memória livre\", \"value\": \"{{ $('Normalizar Campos').item.json.metric_value }}\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Recomendação\", \"value\": \"Verificar consumo de memória e considerar reinício de serviços\" }\n    ],\n    \"markdown\": true\n  }]\n}",
@@ -169,36 +169,94 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [460, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ZABBIX_URL }}/api_jsonrpc.php",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }, { "name": "Authorization", "value": "=Bearer {{ $env.ZABBIX_API_TOKEN }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"jsonrpc\":\"2.0\",\"method\":\"host.get\",\"params\":{\"output\":[\"hostid\"],\"selectGroups\":[\"name\"],\"filter\":{\"host\":[\"{{ $('Normalizar Campos').item.json.host }}\"]}},\"id\":10}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "cpu-totvs-http-0001",
+      "name": "Buscar Grupo Host",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 520],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "jsCode": "const groups = $json.result?.[0]?.groups || [];\nconst is_totvs = groups.some(g => g.name === 'TOTVS');\nconst norm = $('Normalizar Campos').item.json;\nreturn [{ json: { ...norm, is_totvs } }];" },
+      "id": "cpu-totvs-code-0002",
+      "name": "Extrair is_totvs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 520]
+    },
+    {
+      "parameters": { "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "id": "c-t", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }], "combinator": "and" }, "options": {} },
+      "id": "cpu-totvs-if-cpu",
+      "name": "É TOTVS? (CPU)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 60]
+    },
+    {
+      "parameters": { "method": "POST", "url": "={{ $env.TEAMS_SISTEMAS_HARDWARE }}", "sendBody": true, "contentType": "json", "body": "={{ $('Teams — Alerta CPU').item.json }}", "options": {} },
+      "id": "cpu-totvs-send-cpu",
+      "name": "Sistemas — Alerta CPU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 60]
+    },
+    {
+      "parameters": { "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "id": "c-t", "leftValue": "={{ $('Extrair is_totvs').item.json.is_totvs }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }], "combinator": "and" }, "options": {} },
+      "id": "cpu-totvs-if-mem",
+      "name": "É TOTVS? (Memória)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": { "method": "POST", "url": "={{ $env.TEAMS_SISTEMAS_HARDWARE }}", "sendBody": true, "contentType": "json", "body": "={{ $('Teams — Alerta Memória').item.json }}", "options": {} },
+      "id": "cpu-totvs-send-mem",
+      "name": "Sistemas — Alerta Memória",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 300]
     }
   ],
   "connections": {
     "Webhook Zabbix": { "main": [[{ "node": "Normalizar Campos", "type": "main", "index": 0 }]] },
     "Normalizar Campos": {
-      "main": [
-        [
-          { "node": "É PROBLEMA?", "type": "main", "index": 0 },
-          { "node": "Resposta HTTP 200", "type": "main", "index": 0 }
-        ]
-      ]
+      "main": [[
+        { "node": "É PROBLEMA?", "type": "main", "index": 0 },
+        { "node": "Resposta HTTP 200", "type": "main", "index": 0 }
+      ]]
     },
     "É PROBLEMA?": {
       "main": [
-        [{ "node": "É CPU?", "type": "main", "index": 0 }],
+        [{ "node": "Buscar Grupo Host", "type": "main", "index": 0 }],
         []
       ]
     },
+    "Buscar Grupo Host": { "main": [[{ "node": "Extrair is_totvs", "type": "main", "index": 0 }]] },
+    "Extrair is_totvs": { "main": [[{ "node": "É CPU?", "type": "main", "index": 0 }]] },
     "É CPU?": {
       "main": [
-        [
-          { "node": "Teams — Alerta CPU", "type": "main", "index": 0 }
-        ],
-        [
-          { "node": "Teams — Alerta Memória", "type": "main", "index": 0 }
-        ]
+        [{ "node": "Teams — Alerta CPU",    "type": "main", "index": 0 }],
+        [{ "node": "Teams — Alerta Memória","type": "main", "index": 0 }]
       ]
     },
-    "Teams — Alerta CPU": { "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
-    "Teams — Alerta Memória": { "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] }
+    "Teams — Alerta CPU":    { "main": [[{ "node": "É TOTVS? (CPU)",    "type": "main", "index": 0 }]] },
+    "Teams — Alerta Memória":{ "main": [[{ "node": "É TOTVS? (Memória)","type": "main", "index": 0 }]] },
+    "É TOTVS? (CPU)":    { "main": [[{ "node": "Sistemas — Alerta CPU",    "type": "main", "index": 0 }], [{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
+    "É TOTVS? (Memória)":{ "main": [[{ "node": "Sistemas — Alerta Memória","type": "main", "index": 0 }], [{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
+    "Sistemas — Alerta CPU":    { "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] },
+    "Sistemas — Alerta Memória":{ "main": [[{ "node": "Zabbix — Comentar Evento", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": {

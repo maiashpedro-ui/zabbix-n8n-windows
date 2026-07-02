@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "health01-a1b2-c3d4-e5f6-789012345678",
   "name": "n8n — Health Check de Workflows",
   "nodes": [
@@ -77,7 +77,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
