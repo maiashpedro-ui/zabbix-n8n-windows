@@ -140,7 +140,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_WEBHOOK_HARDWARE }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.teams_body }}",
@@ -155,7 +155,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "url": "={{ $env.TEAMS_WEBHOOK_DISPONIBILIDADE }}",
         "sendBody": true,
         "contentType": "json",
         "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"CC0000\",\n  \"summary\": \"HOST INDISPONIVEL — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"HOST INACESSIVEL\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }}\",\n    \"facts\": [\n      { \"name\": \"Detalhe\",    \"value\": \"{{ $('Normalizar Campos').item.json.detail }}\" },\n      { \"name\": \"Trigger\",    \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Acao\",       \"value\": \"Verificar conectividade de rede, status do servidor e coletor Zabbix\" }\n    ],\n    \"markdown\": true\n  }]\n}",
