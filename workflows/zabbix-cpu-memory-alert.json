@@ -109,7 +109,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
+        "url": "={{ $env.TEAMS_INFRA_HARDWARE }}",
         "sendBody": true,
         "contentType": "json",
         "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF6600\",\n  \"summary\": \"CPU Alta — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"CPU Alta Detectada\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Uso de CPU\", \"value\": \"{{ $('Normalizar Campos').item.json.metric_value }}%\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Recomendação\", \"value\": \"Verificar processos em execução via Gerenciador de Tarefas\" }\n    ],\n    \"markdown\": true\n  }]\n}",
@@ -124,7 +124,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.TEAMS_INFRA_SERVICOS }}",
+        "url": "={{ $env.TEAMS_INFRA_HARDWARE }}",
         "sendBody": true,
         "contentType": "json",
         "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"FF0000\",\n  \"summary\": \"Memória Baixa — {{ $('Normalizar Campos').item.json.host }}\",\n  \"sections\": [{\n    \"activityTitle\": \"Memória Baixa Detectada\",\n    \"activitySubtitle\": \"{{ $('Normalizar Campos').item.json.host }} ({{ $('Normalizar Campos').item.json.ip }})\",\n    \"facts\": [\n      { \"name\": \"Memória livre\", \"value\": \"{{ $('Normalizar Campos').item.json.metric_value }}\" },\n      { \"name\": \"Trigger\", \"value\": \"{{ $('Normalizar Campos').item.json.trigger_name }}\" },\n      { \"name\": \"Severidade\", \"value\": \"{{ $('Normalizar Campos').item.json.severity }}\" },\n      { \"name\": \"Recomendação\", \"value\": \"Verificar consumo de memória e considerar reinício de serviços\" }\n    ],\n    \"markdown\": true\n  }]\n}",
